@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.transportadora</groupId>
-	<artifactId>transp-api-crud-spring</artifactId>
+	<artifactId>api-funcoes-teste-spring</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>transp-api-crud-spring</name>
 	<description>Projeto com CRUD Spring + Angular</description>
