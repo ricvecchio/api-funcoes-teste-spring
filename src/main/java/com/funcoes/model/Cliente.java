@@ -1,16 +1,16 @@
 package com.funcoes.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.Getter;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
 public class Cliente {
 
+    @Getter
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idCliente;
@@ -23,8 +23,11 @@ public class Cliente {
     @OneToMany(mappedBy = "cliente", cascade = CascadeType.ALL)
     private List<Conta> contas;
 
-    public Long getIdCliente() {
-        return idCliente;
+    public Cliente() {
+    }
+
+    public Cliente(String nome) {
+        this.nome = nome;
     }
 
     public void setIdCliente(Long idCliente) {
