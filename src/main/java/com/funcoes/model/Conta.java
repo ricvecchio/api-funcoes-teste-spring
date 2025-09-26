@@ -16,7 +16,7 @@ public class Conta {
 
     @ManyToOne
     @JoinColumn(name = "cliente_id")
-    private Cliente cliente;
+    private Cliente cliente; // Cliente dono da conta
 
     public Long getIdConta() {
         return idConta;

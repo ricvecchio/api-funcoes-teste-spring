@@ -36,9 +36,7 @@ public class ContaService {
 
         if (conta.getStatus() == StatusConta.PENDENTE) {
             log.warn("Sistema externo indisponível. Conta enviada para Kafka.");
-            kafkaTemplate.send("conta-a-abrir", conta);
-        } else {
-            log.info("Conta aberta com sucesso para cliente {}!", cliente.getNome());
+            kafkaTemplate.send("conta-a-abrir", conta); // Envia conta pendente para Kafka
         }
     }
 

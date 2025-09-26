@@ -21,7 +21,7 @@ public class Cliente {
     private String nome;
 
     @OneToMany(mappedBy = "cliente", cascade = CascadeType.ALL)
-    private List<Conta> contas;
+    private List<Conta> contas; // Contas do cliente
 
     public Cliente() {
     }
