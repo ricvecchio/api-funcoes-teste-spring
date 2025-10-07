@@ -24,9 +24,10 @@ public class ContaConsumer {
     }
 
     @DltHandler
-    public void tratarFalha(Conta conta, Throwable t) {
-        log.error("Conta {} enviada para Dead Letter Topic após falhas. Erro: {}", conta.getIdConta(), t.getMessage(), t);
+    public void tratarFalha(Conta conta) {
+        log.error("Conta {} enviada para Dead Letter Topic após falhas. Erro: {}", conta.getIdConta());
     }
+
 }
 
 

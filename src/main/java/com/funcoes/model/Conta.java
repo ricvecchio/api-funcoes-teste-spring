@@ -14,7 +14,7 @@ public class Conta {
     @Enumerated(EnumType.STRING)
     private StatusConta status;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "cliente_id")
     private Cliente cliente; // Cliente dono da conta
 
