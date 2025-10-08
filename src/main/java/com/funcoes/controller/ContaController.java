@@ -37,19 +37,18 @@ public class ContaController {
 //    public ResponseEntity<List<Conta>> listarPorCliente(@PathVariable Long idCliente) {
 //        return ResponseEntity.ok(contaService.listarPorCliente(idCliente));
 //    }
+}
 
-    // ============================================
-    // 🔹 Ações de negócio
-    // ============================================
+// ============================================
+// 🔹 MICRO SERVIÇOS: (Contas + Ações de negócio + Observabilidade + Infra)
+// ============================================
+
 //    @PatchMapping("/{idConta}/fechar")
 //    public ResponseEntity<String> fecharConta(@PathVariable Long idConta) {
 //        contaService.fecharConta(idConta);
 //        return ResponseEntity.ok("Conta fechada com sucesso!");
 //    }
 
-    // ============================================
-    // 🔹 Observabilidade / Infra
-    // ============================================
 //    @GetMapping("/health")
 //    public ResponseEntity<Map<String, String>> healthCheck() {
 //        boolean externoOk = contaService.healthCheckValidador();
@@ -59,5 +58,5 @@ public class ContaController {
 //        return ResponseEntity.ok(status);
 //    }
 
-}
+
 
