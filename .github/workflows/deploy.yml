@@ -25,20 +25,23 @@ jobs:
       - name: "[5] Reiniciar serviço conta-service na VPS"
         run: echo "Etapa placeholder - Implementar depois"
 
-#  build_deploy_validacao_consumer:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: "[1] Baixar o código (checkout)"
-#        uses: actions/checkout@v4
-#
-#      - name: "[2] Configurar o JDK 21"
-#        uses: actions/setup-java@v3
-#        with:
-#          distribution: 'temurin'
-#          java-version: '21'
-#
-#      - name: "[3] Compilar e gerar o JAR validacao-consumer"
-#        run: mvn clean package -DskipTests
-#
-#      - name: "[4] Configurar SSH e copiar JAR para VPS"
-#      - name: "[5] Reiniciar serviço validacao-consumer na VPS"
+  build_deploy_kafka_service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "[1] Baixar o código (checkout)"
+        uses: actions/checkout@v4
+
+      - name: "[2] Configurar o JDK 21"
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: "[3] Compilar e gerar o JAR kafka-service"
+        run: mvn clean package -DskipTests
+
+      - name: "[4] Configurar SSH e copiar JAR para VPS"
+        run: echo "Etapa placeholder - Implementar depois"
+
+      - name: "[5] Reiniciar serviço kafka-service na VPS"
+        run: echo "Etapa placeholder - Implementar depois"
