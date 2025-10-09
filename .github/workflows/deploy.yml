@@ -20,7 +20,10 @@ jobs:
         run: mvn clean package -DskipTests
 
       - name: "[4] Configurar SSH e copiar JAR para VPS"
+        run: echo "Etapa placeholder - Implementar depois"
+
       - name: "[5] Reiniciar serviço conta-service na VPS"
+        run: echo "Etapa placeholder - Implementar depois"
 
 #  build_deploy_validacao_consumer:
 #    runs-on: ubuntu-latest
