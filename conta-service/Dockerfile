@@ -1,27 +1,22 @@
 # ===== Build Stage =====
 FROM ubuntu:latest AS build
 
-# Instala JDK e Maven
 RUN apt-get update && apt-get install -y openjdk-21-jdk maven
-
-# Define diretório de trabalho
 WORKDIR /app
 
-# Copia todos os módulos para resolver o parent POM
-COPY ../api-funcoes-teste-spring ./api-funcoes-teste-spring
+# Copia toda a raiz do projeto para que o parent POM seja resolvido
 COPY . .
 
-# Compila o módulo conta-service e suas dependências
+# Build do módulo conta-service, incluindo dependências
 RUN mvn clean install -pl conta-service -am -DskipTests
 
 # ===== Runtime Stage =====
 FROM openjdk:21-jdk-slim
 
-# Porta da aplicação
+WORKDIR /app
 EXPOSE 8080
 
-# Copia o jar compilado
+# Copia o JAR do módulo específico
 COPY --from=build /app/conta-service/target/conta-service-1.0.0.jar app.jar
 
-# Comando para rodar
 ENTRYPOINT ["java", "-jar", "app.jar"]
