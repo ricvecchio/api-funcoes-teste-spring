@@ -1,24 +1,21 @@
 # ===== Build Stage =====
-FROM maven:3.9.2-eclipse-temurin-21 AS build
+# Usa imagem Maven oficial com JDK 21 para compilar a aplicação
+FROM maven:3.9.2-jdk-21 AS build
 
-# Define diretório de trabalho
 WORKDIR /app
 
-# Copia apenas os arquivos do módulo kafka-service e o pom.xml local
+# Copia pom.xml e código-fonte
 COPY pom.xml .
 COPY src ./src
 
-# Compila o projeto e gera o JAR
+# Compila o projeto com Maven (pulando testes)
 RUN mvn clean package -DskipTests
 
 # ===== Runtime Stage =====
 FROM eclipse-temurin:21-jdk-jammy
 
-# Porta da aplicação
 EXPOSE 8080
 
-# Copia o JAR gerado para o runtime
 COPY --from=build /app/target/kafka-service-1.0.0.jar app.jar
 
-# Comando para executar a aplicação
 ENTRYPOINT ["java", "-jar", "app.jar"]

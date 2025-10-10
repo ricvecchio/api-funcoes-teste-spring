@@ -1,24 +1,26 @@
 # ===== Build Stage =====
-FROM maven:3.9.2-eclipse-temurin-21 AS build
+# Usa imagem Maven oficial com JDK 21 para compilar a aplicação
+FROM maven:3.9.2-jdk-21 AS build
 
 # Define diretório de trabalho
 WORKDIR /app
 
-# Copia apenas os arquivos do módulo conta-service e o pom.xml local
+# Copia o pom.xml e o código-fonte
 COPY pom.xml .
 COPY src ./src
 
-# Compila o projeto e gera o JAR
+# Compila o projeto com Maven (pulando testes)
 RUN mvn clean package -DskipTests
 
 # ===== Runtime Stage =====
+# Usa imagem JDK 21 slim para rodar a aplicação
 FROM eclipse-temurin:21-jdk-jammy
 
-# Porta da aplicação
+# Expondo porta da aplicação
 EXPOSE 8080
 
-# Copia o JAR gerado para o runtime
+# Copia o jar gerado da build
 COPY --from=build /app/target/conta-service-1.0.0.jar app.jar
 
-# Comando para executar a aplicação
+# Comando para rodar a aplicação
 ENTRYPOINT ["java", "-jar", "app.jar"]
