@@ -1,42 +1,58 @@
 version: '3.9'
 
 services:
+  # ===== Conta Service =====
   conta-service:
+    # Build usando o Dockerfile único na pasta infra
     build:
-      context: ..
+      context: .
       dockerfile: infra/Dockerfile
       args:
-        MODULE: conta-service
+        MODULE: conta-service  # Define qual módulo compilar
+    image: conta-service:latest
     container_name: conta-service
     ports:
-      - "8081:8080"
+      - "8081:8080"  # Mapeia porta 8080 do container para 8081 local
+    environment:
+      SPRING_PROFILES_ACTIVE: dev  # Define profile Spring Boot
     networks:
-      - app-network
+      - microservices-net
+    depends_on:
+      - kafka-service  # Caso o conta-service dependa do Kafka
 
+  # ===== Kafka Service =====
   kafka-service:
     build:
-      context: ..
+      context: .
       dockerfile: infra/Dockerfile
       args:
         MODULE: kafka-service
+    image: kafka-service:latest
     container_name: kafka-service
     ports:
       - "8082:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
     networks:
-      - app-network
+      - microservices-net
 
+  # ===== Generico Service =====
   generico-service:
     build:
-      context: ..
+      context: .
       dockerfile: infra/Dockerfile
       args:
         MODULE: generico-service
+    image: generico-service:latest
     container_name: generico-service
     ports:
       - "8083:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
     networks:
-      - app-network
+      - microservices-net
 
+# ===== Network compartilhada entre os microserviços =====
 networks:
-  app-network:
+  microservices-net:
     driver: bridge
