@@ -1,11 +1,11 @@
 # ===== Build Stage =====
-# Usa imagem Maven oficial com JDK 21 para compilar a aplicação
-FROM maven:3.9.2-jdk-21 AS build
+# Usa imagem Maven com JDK 21 existente para compilar a aplicação
+FROM maven:3.9.2-eclipse-temurin-21 AS build
 
 # Define diretório de trabalho
 WORKDIR /app
 
-# Copia o pom.xml e o código-fonte
+# Copia pom.xml e código-fonte
 COPY pom.xml .
 COPY src ./src
 
