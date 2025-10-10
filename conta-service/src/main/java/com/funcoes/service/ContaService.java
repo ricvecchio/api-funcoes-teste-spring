@@ -1,6 +1,5 @@
 package com.funcoes.service;
 
-import com.funcoes.component.ValidadorContaExterno;
 import com.funcoes.model.AbrirContaRequest;
 import com.funcoes.model.Cliente;
 import com.funcoes.model.Conta;
@@ -25,7 +24,6 @@ public class ContaService {
     private final ContaRepository contaRepository;
     @Autowired(required = false)
     private final KafkaTemplate<String, Conta> kafkaTemplate;
-    private final ValidadorContaExterno validadorConta;
 
     @Transactional
     public void abrirConta(AbrirContaRequest request) {
@@ -35,14 +33,11 @@ public class ContaService {
         Conta conta = new Conta();
         conta.setCliente(cliente);
         conta.setTipo(request.tipoConta());
-        conta.setStatus(validadorConta.validar() ? StatusConta.ABERTA : StatusConta.PENDENTE);
+        conta.setStatus(StatusConta.PENDENTE);
 
         contaRepository.save(conta);
 
-        if (conta.getStatus() == StatusConta.PENDENTE && kafkaTemplate != null) {
-            log.warn("Sistema externo indisponível. Conta enviada para Kafka.");
-            kafkaTemplate.send("conta-a-abrir", conta);
-        }
+        kafkaTemplate.send("conta-a-abrir", conta);
     }
 
     @Transactional(readOnly = true)
@@ -50,15 +45,4 @@ public class ContaService {
         return contaRepository.findAll();
     }
 
-    @Transactional
-    public void processarContaPendente(Conta conta) {
-        Conta contaBanco = contaRepository.findById(conta.getIdConta())
-                .orElseThrow(() -> new IllegalArgumentException("Conta não encontrada: " + conta.getIdConta()));
-
-        if (contaBanco.getStatus() == StatusConta.PENDENTE) {
-            contaBanco.setStatus(validadorConta.validar() ? StatusConta.ABERTA : StatusConta.FALHA);
-            contaRepository.save(contaBanco);
-            log.info("Conta {} processada com status {} pelo Kafka!", contaBanco.getIdConta(), contaBanco.getStatus());
-        }
-    }
 }

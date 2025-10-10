@@ -1,9 +1,9 @@
 package com.funcoes.component;
 
 import com.funcoes.model.Conta;
-import com.funcoes.service.ContaService;
-import lombok.extern.slf4j.Slf4j;
+import com.funcoes.service.KafkaContaService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.DltHandler;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
@@ -14,21 +14,25 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @RequiredArgsConstructor
 public class ContaConsumer {
-    private final ContaService contaService;
+    private final KafkaContaService kafkaContaService;
 
-    @KafkaListener(topics = "conta-a-abrir", groupId = "grupo-conta")
-    @RetryableTopic(attempts = "3", backoff = @Backoff(delay = 2000), autoCreateTopics = "false")
+    @KafkaListener(
+            topics = "conta-a-abrir",
+            groupId = "grupo-conta",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    @RetryableTopic(
+            attempts = "3",
+            backoff = @Backoff(delay = 2000),
+            autoCreateTopics = "false"
+    )
     public void processarContaKafka(Conta conta) {
         log.info("Consumindo conta {} do cliente {}", conta.getIdConta(), conta.getCliente().getNome());
-        contaService.processarContaPendente(conta);
+        kafkaContaService.processarConta(conta);
     }
 
     @DltHandler
     public void tratarFalha(Conta conta) {
-        log.error("Conta {} enviada para Dead Letter Topic após falhas. Erro: {}", conta.getIdConta());
+        log.error("Conta {} enviada para Dead Letter Topic após falhas. Erro: {}", conta.getIdConta(), conta.getCliente().getNome());
     }
-
 }
-
-
-

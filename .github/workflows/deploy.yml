@@ -19,11 +19,8 @@ jobs:
       - name: "[3] Compilar e gerar o JAR conta-service"
         run: mvn clean package -DskipTests
 
-      - name: "[4] Configurar SSH e copiar JAR para VPS"
-        run: echo "Etapa placeholder - Implementar depois"
-
-      - name: "[5] Reiniciar serviço conta-service na VPS"
-        run: echo "Etapa placeholder - Implementar depois"
+      - name: "[4] Construir imagem Docker"
+        run: docker build -t conta-service:latest .
 
   build_deploy_kafka_service:
     runs-on: ubuntu-latest
@@ -40,8 +37,5 @@ jobs:
       - name: "[3] Compilar e gerar o JAR kafka-service"
         run: mvn clean package -DskipTests
 
-      - name: "[4] Configurar SSH e copiar JAR para VPS"
-        run: echo "Etapa placeholder - Implementar depois"
-
-      - name: "[5] Reiniciar serviço kafka-service na VPS"
-        run: echo "Etapa placeholder - Implementar depois"
+      - name: "[4] Construir imagem Docker"
+        run: docker build -t kafka-service:latest .

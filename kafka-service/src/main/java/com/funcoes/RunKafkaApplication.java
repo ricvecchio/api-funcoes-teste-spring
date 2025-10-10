@@ -6,9 +6,9 @@ import org.springframework.cache.annotation.EnableCaching;
 
 @SpringBootApplication
 @EnableCaching
-public class RunSpringApplication {
+public class RunKafkaApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(RunSpringApplication.class, args);
+        SpringApplication.run(RunKafkaApplication.class, args);
     }
 }
