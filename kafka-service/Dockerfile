@@ -1,21 +1,32 @@
 # ===== Build Stage =====
-# Usa imagem Maven com JDK 21 existente para compilar a aplicação
-FROM maven:3.9.2-eclipse-temurin-21 AS build
+# Imagem base Ubuntu para instalar JDK 21 e Maven
+FROM ubuntu:latest AS build
 
+# Atualiza pacotes e instala JDK 21 e Maven
+RUN apt-get update && apt-get install -y openjdk-21-jdk maven
+
+# Define diretório de trabalho
 WORKDIR /app
 
-# Copia pom.xml e código-fonte
+# Copia arquivos Maven e código-fonte
 COPY pom.xml .
 COPY src ./src
 
-# Compila o projeto com Maven (pulando testes)
-RUN mvn clean package -DskipTests
+# Compila o projeto com Maven, pulando testes para agilizar build
+RUN mvn clean install -DskipTests
 
 # ===== Runtime Stage =====
-FROM eclipse-temurin:21-jdk-jammy
+# Imagem enxuta com OpenJDK 21
+FROM openjdk:21-jdk-slim
 
+# Define diretório de trabalho
+WORKDIR /app
+
+# Expondo porta da aplicação
 EXPOSE 8080
 
-COPY --from=build /app/target/kafka-service-1.0.0.jar app.jar
+# Copia o JAR gerado da build
+COPY --from=build /app/target/*.jar app.jar
 
+# Comando para iniciar a aplicação
 ENTRYPOINT ["java", "-jar", "app.jar"]
