@@ -13,18 +13,15 @@ jobs:
         service: [conta-service, kafka-service]
 
     steps:
-      # 1️⃣ Checkout do código
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # 2️⃣ Configurar JDK 21
       - name: "[2] Configurar JDK 21"
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      # 3️⃣ Configurar cache do Maven
       - name: "[3] Cache Maven"
         uses: actions/cache@v3
         with:
@@ -33,19 +30,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # 4️⃣ Build JAR
-      - name: "[4] Build JAR"
+      - name: "[4] Build JAR (local test)"
         run: mvn -f ${{ matrix.service }}/pom.xml clean package -DskipTests
 
-      # 5️⃣ Build Docker Image
       - name: "[5] Build Docker Image"
-        run: docker build -t ${{ matrix.service }}:latest ./${{ matrix.service }}
+        run: docker build \
+          -f infra/Dockerfile \
+          --build-arg MODULE=${{ matrix.service }} \
+          -t ${{ matrix.service }}:latest .
 
-      # 6️⃣ Push Docker Image para registry (opcional)
       # - name: "[6] Push Docker Image"
       #   run: docker push seu-registry/${{ matrix.service }}:latest
 
-      # 7️⃣ Deploy via SSH (placeholder)
       - name: "[7] Deploy via SSH"
         run: |
           echo "Adicionar comandos de SCP/SSH para enviar o JAR ou subir container na VPS"
