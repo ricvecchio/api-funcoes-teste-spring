@@ -8,4 +8,3 @@ public record AbrirContaRequest(
         @NotBlank String tipoConta
 ) {
 }
-
