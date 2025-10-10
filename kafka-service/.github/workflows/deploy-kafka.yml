@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # 3️⃣ Cache do Maven
+      # 3️⃣ Cache Maven
       - name: "[3] Cache Maven"
         uses: actions/cache@v3
         with:
@@ -36,11 +36,11 @@ jobs:
       - name: "[4] Build JAR"
         run: mvn -f kafka-service/pom.xml clean package -DskipTests
 
-      # 5️⃣ Build da imagem Docker
+      # 5️⃣ Build Docker Image
       - name: "[5] Build Docker Image"
         run: docker build -t kafka-service:latest ./kafka-service
 
       # 6️⃣ Deploy via SSH (placeholder)
       - name: "[6] Deploy via SSH"
         run: |
-          echo "Adicionar comandos SCP/SSH para enviar o container à VPS"
+          echo "Enviar app.jar ou subir container na VPS"

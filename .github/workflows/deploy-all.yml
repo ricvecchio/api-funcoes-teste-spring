@@ -1,0 +1,32 @@
+name: CI Integração Microserviços
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_all:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "[1] Checkout do código"
+        uses: actions/checkout@v4
+
+      # Build Conta Service
+      - name: "[2] Build Conta Service"
+        run: |
+          cd conta-service
+          mvn clean package -DskipTests
+
+      # Build Kafka Service
+      - name: "[3] Build Kafka Service"
+        run: |
+          cd ../kafka-service
+          mvn clean package -DskipTests
+
+      # Subir todos os serviços localmente (opcional)
+      - name: "[4] Docker Compose Up"
+        run: |
+          cd .infra
+          docker-compose up -d --build
