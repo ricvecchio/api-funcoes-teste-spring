@@ -1,83 +1,51 @@
-version: "3.9"
+version: '3.9'
 
 services:
-  # ===== Banco de Dados =====
-  postgres:
-    image: postgres:15
-    container_name: postgres-db
-    restart: always
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "${POSTGRES_PORT}:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  # ===== Kafka =====
-  kafka:
-    image: bitnami/kafka:3.7
-    container_name: kafka
-    restart: always
-    environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${KAFKA_BROKER}
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-    ports:
-      - "9092:9092"
-    depends_on:
-      - zookeeper
-
-  # ===== Zookeeper =====
-  zookeeper:
-    image: bitnami/zookeeper:3.9
-    container_name: zookeeper
-    restart: always
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-    ports:
-      - "2181:2181"
-
-  # ===== Conta Service =====
+  # ==============================
+  # Serviço de Conta
+  # ==============================
   conta-service:
     build:
-      context: .
-      dockerfile: conta-service/Dockerfile
+      context: ..
+      dockerfile: infra/Dockerfile  # Dockerfile único na pasta infra
+      args:
+        MODULE: conta-service       # Passa o módulo a ser construído
     container_name: conta-service
-    restart: always
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:${POSTGRES_PORT}/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
-      SERVER_PORT: ${CONTA_SERVICE_PORT}
     ports:
-      - "${CONTA_SERVICE_PORT}:8080"
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
     depends_on:
-      - postgres
-      - kafka
+      - kafka-service
 
-  # ===== Kafka Service =====
+  # ==============================
+  # Serviço Kafka
+  # ==============================
   kafka-service:
     build:
-      context: .
-      dockerfile: kafka-service/Dockerfile
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        MODULE: kafka-service
     container_name: kafka-service
-    restart: always
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
-      SPRING_KAFKA_CONSUMER_GROUP_ID: ${KAFKA_GROUP_ID}
-      SERVER_PORT: ${KAFKA_SERVICE_PORT}
     ports:
-      - "${KAFKA_SERVICE_PORT}:8080"
+      - "9092:9092"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
     depends_on:
-      - kafka
+      - generico-service
 
-# ===== Volumes =====
-volumes:
-  pgdata:
+  # ==============================
+  # Serviço Genérico (Commons / Lib)
+  # ==============================
+  generico-service:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      args:
+        MODULE: generico-service
+    container_name: generico-service
+    ports:
+      - "8070:8070"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
