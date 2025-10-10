@@ -1,23 +1,24 @@
-# Build stage
-FROM ubuntu:latest AS build
+# ===== Build Stage =====
+FROM maven:3.9.2-eclipse-temurin-21 AS build
 
-# Atualiza pacotes e instala JDK
-RUN apt-get update && apt-get install -y openjdk-21-jdk maven
+# Define diretório de trabalho
+WORKDIR /app
 
-# Copia todo o projeto para o container
-COPY . .
+# Copia apenas os arquivos do módulo conta-service e o pom.xml local
+COPY pom.xml .
+COPY src ./src
 
-# Compila o projeto com Maven
-RUN mvn clean install
+# Compila o projeto e gera o JAR
+RUN mvn clean package -DskipTests
 
-# Runtime stage
-FROM openjdk:21-jdk-slim
+# ===== Runtime Stage =====
+FROM eclipse-temurin:21-jdk-jammy
 
-# Expondo porta da aplicação
+# Porta da aplicação
 EXPOSE 8080
 
-# Copia o jar gerado da build
-COPY --from=build /target/api-funcoes-teste-spring-0.0.1-SNAPSHOT.jar app.jar
+# Copia o JAR gerado para o runtime
+COPY --from=build /app/target/conta-service-1.0.0.jar app.jar
 
-# Comando para rodar a aplicação
+# Comando para executar a aplicação
 ENTRYPOINT ["java", "-jar", "app.jar"]
