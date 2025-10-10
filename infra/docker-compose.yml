@@ -1,6 +1,7 @@
 version: "3.9"
 
 services:
+  # ===== Banco de Dados =====
   postgres:
     image: postgres:15
     container_name: postgres-db
@@ -14,15 +15,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  zookeeper:
-    image: bitnami/zookeeper:3.9
-    container_name: zookeeper
-    restart: always
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-    ports:
-      - "2181:2181"
-
+  # ===== Kafka =====
   kafka:
     image: bitnami/kafka:3.7
     container_name: kafka
@@ -38,8 +31,21 @@ services:
     depends_on:
       - zookeeper
 
+  # ===== Zookeeper =====
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: zookeeper
+    restart: always
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+
+  # ===== Conta Service =====
   conta-service:
-    build: ./conta-service
+    build:
+      context: .
+      dockerfile: conta-service/Dockerfile
     container_name: conta-service
     restart: always
     environment:
@@ -55,8 +61,11 @@ services:
       - postgres
       - kafka
 
+  # ===== Kafka Service =====
   kafka-service:
-    build: ./kafka-service
+    build:
+      context: .
+      dockerfile: kafka-service/Dockerfile
     container_name: kafka-service
     restart: always
     environment:
@@ -69,5 +78,6 @@ services:
     depends_on:
       - kafka
 
+# ===== Volumes =====
 volumes:
   pgdata:

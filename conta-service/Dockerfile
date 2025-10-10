@@ -1,8 +1,8 @@
 # ===== Build Stage =====
-# Usa Ubuntu para instalar JDK 21 e Maven
+# Usa Ubuntu como base para instalar JDK e Maven
 FROM ubuntu:latest AS build
 
-# Instala JDK 21 e Maven
+# Atualiza pacotes, instala JDK 21 e Maven
 RUN apt-get update && \
     apt-get install -y openjdk-21-jdk maven && \
     rm -rf /var/lib/apt/lists/*
@@ -10,22 +10,21 @@ RUN apt-get update && \
 # Define diretório de trabalho
 WORKDIR /app
 
-# Copia todo o projeto raiz (multi-módulo)
-COPY . .
+# Copia todo o projeto multi-módulo para o container
+COPY ../ ./
 
-# Compila todos os módulos e gera jars, pulando testes
-RUN mvn clean install -DskipTests
+# Compila somente o módulo conta-service e suas dependências
+RUN mvn clean install -pl conta-service -am -DskipTests
 
 # ===== Runtime Stage =====
-# Imagem enxuta com apenas JDK 21 para rodar o serviço
 FROM openjdk:21-jdk-slim
 
 WORKDIR /app
 
-# Expõe porta do serviço
+# Expõe a porta do serviço
 EXPOSE 8080
 
-# Copia o jar específico do conta-service
+# Copia o jar gerado do build stage
 COPY --from=build /app/conta-service/target/*.jar app.jar
 
 # Comando para rodar a aplicação
