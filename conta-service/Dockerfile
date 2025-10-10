@@ -1,5 +1,5 @@
 # ===== Build Stage =====
-# Usamos Ubuntu para instalar JDK 21 e Maven
+# Imagem base Ubuntu para instalar JDK 21 e Maven
 FROM ubuntu:latest AS build
 
 # Atualiza pacotes e instala JDK 21 + Maven
@@ -10,19 +10,19 @@ RUN apt-get update && \
 # Define diretório de trabalho dentro do container
 WORKDIR /app
 
-# Copia todo o projeto
+# Copia todo o projeto para o container
 COPY . .
 
-# Compila o projeto, gerando o JAR no target, pulando testes
+# Build do projeto gerando o JAR, pulando testes
 RUN mvn clean install -DskipTests
 
 # ===== Runtime Stage =====
-# Imagem final leve apenas com JDK 21 para rodar a aplicação
+# Imagem leve apenas com JDK 21 para rodar a aplicação
 FROM openjdk:21-jdk-slim
 
 WORKDIR /app
 
-# Expõe a porta do serviço
+# Expõe a porta padrão do Spring Boot
 EXPOSE 8080
 
 # Copia o JAR compilado do build stage

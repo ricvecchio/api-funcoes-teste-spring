@@ -24,6 +24,13 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
+      # 2.1️⃣ Confirmação do JAVA_HOME e versão
+      - name: "[2.1] Verificar Java"
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          java -version
+          javac -version
+
       # 3️⃣ Cache do Maven
       - name: "[3] Cache Maven"
         uses: actions/cache@v3

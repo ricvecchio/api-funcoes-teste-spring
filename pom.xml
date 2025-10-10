@@ -14,18 +14,21 @@
     <name>API Funções - Projeto Raiz</name>
     <description>Projeto pai que agrega os microserviços Conta e Kafka</description>
 
+    <!-- Definindo os módulos filhos -->
     <modules>
         <module>conta-service</module>
         <module>kafka-service</module>
     </modules>
 
     <properties>
+        <!-- Definindo Java 21 para todos os módulos -->
         <java.version>21</java.version>
         <spring.boot.version>3.3.2</spring.boot.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Gerenciamento centralizado de dependências Spring Boot -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -39,6 +42,7 @@
     <build>
         <pluginManagement>
             <plugins>
+                <!-- Plugin Spring Boot para todos os módulos -->
                 <plugin>
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
