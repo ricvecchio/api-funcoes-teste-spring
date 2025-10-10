@@ -1,8 +1,8 @@
 # ===== Build Stage =====
-# Usa Ubuntu como base para instalar JDK 21 e Maven
+# Usa Ubuntu para instalar JDK 21 e Maven
 FROM ubuntu:latest AS build
 
-# Atualiza pacotes e instala JDK 21 e Maven
+# Instala JDK 21 e Maven
 RUN apt-get update && \
     apt-get install -y openjdk-21-jdk maven && \
     rm -rf /var/lib/apt/lists/*
@@ -10,24 +10,23 @@ RUN apt-get update && \
 # Define diretório de trabalho
 WORKDIR /app
 
-# Copia todo o projeto raiz (multi-módulo) para o container
+# Copia todo o projeto raiz (multi-módulo)
 COPY . .
 
-# Compila todos os módulos (conta-service, kafka-service) e instala o jar
+# Compila todos os módulos e gera jars, pulando testes
 RUN mvn clean install -DskipTests
 
 # ===== Runtime Stage =====
 # Imagem enxuta com apenas JDK 21 para rodar o serviço
 FROM openjdk:21-jdk-slim
 
-# Define diretório de trabalho
 WORKDIR /app
 
-# Expondo porta padrão da aplicação
+# Expõe porta do serviço
 EXPOSE 8080
 
-# Copia o jar específico do conta-service da build stage
+# Copia o jar específico do conta-service
 COPY --from=build /app/conta-service/target/*.jar app.jar
 
-# Comando para iniciar a aplicação
+# Comando para rodar a aplicação
 ENTRYPOINT ["java", "-jar", "app.jar"]
