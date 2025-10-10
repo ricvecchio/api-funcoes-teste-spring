@@ -1,0 +1,46 @@
+name: Deploy Kafka Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "kafka-service/**"
+
+jobs:
+  build_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout do código
+      - name: "[1] Checkout do código"
+        uses: actions/checkout@v4
+
+      # 2️⃣ Configurar JDK 21
+      - name: "[2] Configurar JDK 21"
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      # 3️⃣ Cache do Maven
+      - name: "[3] Cache Maven"
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('kafka-service/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # 4️⃣ Build do JAR
+      - name: "[4] Build JAR"
+        run: mvn -f kafka-service/pom.xml clean package -DskipTests
+
+      # 5️⃣ Build da imagem Docker
+      - name: "[5] Build Docker Image"
+        run: docker build -t kafka-service:latest ./kafka-service
+
+      # 6️⃣ Deploy via SSH (placeholder)
+      - name: "[6] Deploy via SSH"
+        run: |
+          echo "Adicionar comandos SCP/SSH para enviar o container à VPS"
