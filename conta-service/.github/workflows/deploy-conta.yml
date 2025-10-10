@@ -23,8 +23,8 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # 2.1️⃣ Instalar Maven 3.10.1
-      - name: "[2.1] Instalar Maven 3.10.1"
+      # 2.1️⃣ Instalar Maven 3.10+
+      - name: "[2.1] Instalar Maven 3.10+"
         run: |
           MAVEN_VERSION=3.10.1
           wget https://dlcdn.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
@@ -42,7 +42,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # 4️⃣ Build do JAR
+      # 4️⃣ Build JAR
       - name: "[4] Build JAR"
         run: mvn -f conta-service/pom.xml clean package -DskipTests
 
@@ -52,5 +52,4 @@ jobs:
 
       # 6️⃣ Deploy via SSH (placeholder)
       - name: "[6] Deploy via SSH"
-        run: |
-          echo "Enviar app.jar ou subir container na VPS"
+        run: echo "Enviar app.jar ou subir container na VPS"
