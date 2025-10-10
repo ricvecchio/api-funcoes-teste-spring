@@ -1,20 +1,32 @@
 # ===== Build Stage =====
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+# Usamos Ubuntu para instalar JDK 21 e Maven
+FROM ubuntu:latest AS build
 
+# Atualiza pacotes e instala JDK 21 + Maven
+RUN apt-get update && \
+    apt-get install -y openjdk-21-jdk maven && \
+    apt-get clean
+
+# Define diretório de trabalho dentro do container
 WORKDIR /app
 
-COPY pom.xml .
-COPY src ./src
+# Copia todo o projeto
+COPY . .
 
-RUN mvn clean package -DskipTests
+# Compila o projeto, gerando o JAR no target, pulando testes
+RUN mvn clean install -DskipTests
 
 # ===== Runtime Stage =====
-FROM eclipse-temurin:21-jre-alpine
+# Imagem final leve apenas com JDK 21 para rodar a aplicação
+FROM openjdk:21-jdk-slim
 
 WORKDIR /app
 
-COPY --from=build /app/target/*.jar app.jar
-
+# Expõe a porta do serviço
 EXPOSE 8080
 
+# Copia o JAR compilado do build stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Comando para iniciar a aplicação
 ENTRYPOINT ["java", "-jar", "app.jar"]

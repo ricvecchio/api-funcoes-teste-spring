@@ -22,6 +22,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: 'maven'
 
       # 3️⃣ Cache do Maven
       - name: "[3] Cache Maven"
