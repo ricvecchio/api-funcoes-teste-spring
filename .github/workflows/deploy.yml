@@ -1,41 +1,51 @@
-name: "Deploy Spring Boot API"
+name: Deploy Microserviços Spring Boot
+
 on:
   push:
     branches:
       - main
+
 jobs:
-  build_deploy_conta_service:
+  build_deploy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [conta-service, kafka-service]
+
     steps:
-      - name: "[1] Baixar o código (checkout)"
+      # 1️⃣ Checkout do código
+      - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      - name: "[2] Configurar o JDK 21"
+      # 2️⃣ Configurar JDK 21
+      - name: "[2] Configurar JDK 21"
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: "[3] Compilar e gerar o JAR conta-service"
-        run: mvn clean package -DskipTests
-
-      - name: "[4] Construir imagem Docker"
-        run: docker build -t conta-service:latest .
-
-  build_deploy_kafka_service:
-    runs-on: ubuntu-latest
-    steps:
-      - name: "[1] Baixar o código (checkout)"
-        uses: actions/checkout@v4
-
-      - name: "[2] Configurar o JDK 21"
-        uses: actions/setup-java@v3
+      # 3️⃣ Configurar cache do Maven
+      - name: "[3] Cache Maven"
+        uses: actions/cache@v3
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
 
-      - name: "[3] Compilar e gerar o JAR kafka-service"
-        run: mvn clean package -DskipTests
+      # 4️⃣ Build JAR
+      - name: "[4] Build JAR"
+        run: mvn -f ${{ matrix.service }}/pom.xml clean package -DskipTests
 
-      - name: "[4] Construir imagem Docker"
-        run: docker build -t kafka-service:latest .
+      # 5️⃣ Build Docker Image
+      - name: "[5] Build Docker Image"
+        run: docker build -t ${{ matrix.service }}:latest ./${{ matrix.service }}
+
+      # 6️⃣ Push Docker Image para registry (opcional)
+      # - name: "[6] Push Docker Image"
+      #   run: docker push seu-registry/${{ matrix.service }}:latest
+
+      # 7️⃣ Deploy via SSH (placeholder)
+      - name: "[7] Deploy via SSH"
+        run: |
+          echo "Adicionar comandos de SCP/SSH para enviar o JAR ou subir container na VPS"
