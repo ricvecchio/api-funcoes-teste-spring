@@ -5,10 +5,8 @@ on:
     branches: [ main ]
 
 jobs:
-  # Job de Build e Testes dos Microserviços
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
@@ -39,11 +37,9 @@ jobs:
           mvn clean compile -DskipTests -q
           echo "✅ Kafka Service compilado"
 
-  # Job de Integração Docker
   docker-integration:
     runs-on: ubuntu-latest
     needs: build-and-test
-
     steps:
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
@@ -58,12 +54,9 @@ jobs:
           docker build -t kafka-service:latest -f kafka-service/Dockerfile .
           echo "✅ Imagens Docker construídas"
 
-      - name: "[4] Criar e Executar Docker Compose"
+      - name: "[4] Criar docker-compose.yml"
         run: |
-          echo "🐳 Configurando ambiente Docker..."
-          
-          # Criar docker-compose simplificado
-          cat > docker-compose-ci.yml << 'EOF'
+          cat << 'EOF' > docker-compose-ci.yml
 version: '3.8'
 
 services:
@@ -143,51 +136,46 @@ networks:
   microservices-net:
     driver: bridge
   EOF
-  
-  # Iniciar infraestrutura
-  echo "🚀 Iniciando infraestrutura..."
-  docker compose -f docker-compose-ci.yml up -d postgres zookeeper kafka-broker
-  sleep 30
-  
-  # Verificar infraestrutura
-  echo "🔍 Verificando infraestrutura..."
-  docker compose -f docker-compose-ci.yml ps
-  
-  # Iniciar serviços
-  echo "🚀 Iniciando serviços..."
-  docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
-  sleep 45
-  
-  # Verificar serviços
-  echo "🔍 Verificando serviços..."
-  docker compose -f docker-compose-ci.yml ps
-  
-  # Testar health checks
-  echo "🏥 Testando health checks..."
-  
-  # Testar Conta Service
-  echo "🔍 Testando Conta Service..."
-  if curl -s -f http://localhost:8081/health; then
-echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
-  else
-echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU"
-  docker compose -f docker-compose-ci.yml logs conta-service
-  exit 1
-  fi
-  
-  # Testar Kafka Service
-  echo "🔍 Testando Kafka Service..."
-  if curl -s -f http://localhost:8082/health; then
-echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
-  else
-echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU"
-  docker compose -f docker-compose-ci.yml logs kafka-service
-  exit 1
-  fi
-  
-  echo "🎉 TODOS OS TESTES PASSARAM!"
 
-- name: "[5] Limpar Ambiente"
+- name: "[5] Executar Docker Compose"
+  run: |
+    echo "🚀 Iniciando infraestrutura..."
+    docker compose -f docker-compose-ci.yml up -d postgres zookeeper kafka-broker
+    sleep 30
+    
+    echo "🔍 Verificando infraestrutura..."
+    docker compose -f docker-compose-ci.yml ps
+    
+    echo "🚀 Iniciando serviços..."
+    docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
+    sleep 45
+    
+    echo "🔍 Verificando serviços..."
+    docker compose -f docker-compose-ci.yml ps
+    
+    echo "🏥 Testando health checks..."
+    
+    echo "🔍 Testando Conta Service..."
+    if curl -s -f http://localhost:8081/actuator/health; then
+      echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
+    else
+      echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU"
+      docker compose -f docker-compose-ci.yml logs conta-service
+      exit 1
+    fi
+    
+    echo "🔍 Testando Kafka Service..."
+    if curl -s -f http://localhost:8082/actuator/health; then
+      echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
+    else
+      echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU"
+      docker compose -f docker-compose-ci.yml logs kafka-service
+      exit 1
+    fi
+    
+    echo "🎉 TODOS OS TESTES PASSARAM!"
+
+- name: "[6] Limpar Ambiente"
   if: always()
   run: |
     docker compose -f docker-compose-ci.yml down -v
@@ -196,7 +184,6 @@ echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU"
 security-scan:
   runs-on: ubuntu-latest
   needs: build-and-test
-
   steps:
     - name: "[1] Checkout"
       uses: actions/checkout@v4
