@@ -1,28 +1,30 @@
 # ===== Build Stage =====
-# Ubuntu + JDK 21 + Maven
-FROM ubuntu:latest AS build
-
-RUN apt-get update && \
-    apt-get install -y openjdk-21-jdk maven && \
-    apt-get clean
+# Usar imagem oficial Maven com Java 21 (CORREÇÃO: Imagem oficial)
+FROM maven:3.9.8-eclipse-temurin-21 AS build
 
 WORKDIR /app
 
-# Copia todo o código do microserviço
-COPY . .
+# Copiar arquivos de configuração do Maven primeiro (para cache de dependências)
+COPY pom.xml .
+COPY src ./src
 
-# Compila e gera o JAR pulando testes
-RUN mvn clean install -DskipTests
+# Compilar e gerar JAR (CORREÇÃO: Usar perfil correto)
+RUN mvn clean package -DskipTests
 
 # ===== Runtime Stage =====
-# Imagem final leve apenas com JDK 21
-FROM openjdk:21-jdk-slim
+# Imagem final leve apenas com JRE 21 (CORREÇÃO: Usar JRE slim)
+FROM eclipse-temurin:21-jre-slim
 
 WORKDIR /app
+
+# Criar usuário não-root para segurança (BOA PRÁTICA)
+RUN groupadd -r spring && useradd -r -g spring spring
+USER spring
 
 EXPOSE 8080
 
-# Copia o JAR gerado
+# Copiar JAR gerado (CORREÇÃO: Caminho correto)
 COPY --from=build /app/target/*.jar app.jar
 
+# Comando de execução
 ENTRYPOINT ["java", "-jar", "app.jar"]

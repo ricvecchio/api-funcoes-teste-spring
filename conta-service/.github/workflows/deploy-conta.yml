@@ -16,25 +16,22 @@ jobs:
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # 2️⃣ Configurar JDK 21
+      # 2️⃣ Configurar JDK 21 (CORREÇÃO: Usar setup-java oficial)
       - name: "[2] Configurar JDK 21"
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
+          distribution: 'temurin'  # Distribuição recomendada para Java 21
           java-version: '21'
 
-      # 2.1️⃣ Instalar Maven 3.10+
-      - name: "[2.1] Instalar Maven 3.10+"
+      # 3️⃣ Configurar Maven (CORREÇÃO: Instalar via apt)
+      - name: "[3] Configurar Maven"
         run: |
-          MAVEN_VERSION=3.10.1
-          wget https://dlcdn.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
-          tar xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
-          sudo mv apache-maven-$MAVEN_VERSION /opt/maven
-          export PATH=/opt/maven/bin:$PATH
-          mvn -version
+          sudo apt-get update
+          sudo apt-get install -y maven
+          mvn -version  # Verificar versão instalada
 
-      # 3️⃣ Cache Maven
-      - name: "[3] Cache Maven"
+      # 4️⃣ Cache Maven (mantido para performance)
+      - name: "[4] Cache Maven"
         uses: actions/cache@v3
         with:
           path: ~/.m2/repository
@@ -42,14 +39,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # 4️⃣ Build JAR
-      - name: "[4] Build JAR"
-        run: mvn -f conta-service/pom.xml clean package -DskipTests
+      # 5️⃣ Build JAR (CORREÇÃO: Usar compile antes de package)
+      - name: "[5] Build e Package"
+        run: |
+          cd conta-service
+          mvn clean compile package -DskipTests
 
-      # 5️⃣ Build Docker Image
-      - name: "[5] Build Docker Image"
+      # 6️⃣ Build Docker Image
+      - name: "[6] Build Docker Image"
         run: docker build -t conta-service:latest ./conta-service
 
-      # 6️⃣ Deploy via SSH (placeholder)
-      - name: "[6] Deploy via SSH"
+      # 7️⃣ Deploy via SSH (placeholder)
+      - name: "[7] Deploy via SSH"
         run: echo "Enviar app.jar ou subir container na VPS"
