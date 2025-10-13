@@ -18,7 +18,7 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      - name: "[3] Build Projeto Raiz"
+      - name: "[3] Build Projeto Raiz "
         run: |
           echo "🏗️  Building projeto raiz..."
           mvn clean install -DskipTests -q
