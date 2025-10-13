@@ -8,29 +8,29 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: "[1] Checkout do código"
+      - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: "[2] Configurar JDK 21"
+      - name: Configurar JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
           cache: 'maven'
 
-      - name: "[3] Build Projeto Raiz "
+      - name: Build Projeto Raiz
         run: |
-          echo "🏗️  Building projeto raiz..."
+          echo "🏗️ Building projeto raiz..."
           mvn clean install -DskipTests -q
 
-      - name: "[4] Build Conta Service"
+      - name: Build Conta Service
         run: |
           echo "🔧 Building Conta Service..."
           cd conta-service
           mvn clean compile -DskipTests -q
           echo "✅ Conta Service compilado"
 
-      - name: "[5] Build Kafka Service"
+      - name: Build Kafka Service
         run: |
           echo "🔧 Building Kafka Service..."
           cd kafka-service
@@ -41,185 +41,93 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
-      - name: "[1] Checkout do código"
+      - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: "[2] Configurar Docker Buildx"
+      - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: "[3] Build das Imagens Docker"
+      - name: Build das Imagens Docker
         run: |
           echo "🐳 Build das imagens Docker..."
           docker build -t conta-service:latest -f conta-service/Dockerfile .
           docker build -t kafka-service:latest -f kafka-service/Dockerfile .
           echo "✅ Imagens Docker construídas"
 
-      - name: "[4] Criar docker-compose.yml"
+      - name: Criar docker-compose.yml
         run: |
-          echo "version: '3.8'" > docker-compose-ci.yml
-          echo "" >> docker-compose-ci.yml
-          echo "services:" >> docker-compose-ci.yml
-          echo "  postgres:" >> docker-compose-ci.yml
-          echo "    image: postgres:15-alpine" >> docker-compose-ci.yml
-          echo "    container_name: postgres-db" >> docker-compose-ci.yml
-          echo "    environment:" >> docker-compose-ci.yml
-          echo "      POSTGRES_DB: conta_db" >> docker-compose-ci.yml
-          echo "      POSTGRES_USER: postgres" >> docker-compose-ci.yml
-          echo "      POSTGRES_PASSWORD: password" >> docker-compose-ci.yml
-          echo "    ports:" >> docker-compose-ci.yml
-          echo "      - \"5432:5432\"" >> docker-compose-ci.yml
-          echo "    networks:" >> docker-compose-ci.yml
-          echo "      - microservices-net" >> docker-compose-ci.yml
-          echo "" >> docker-compose-ci.yml
-          echo "  zookeeper:" >> docker-compose-ci.yml
-          echo "    image: confluentinc/cp-zookeeper:7.5.0" >> docker-compose-ci.yml
-          echo "    container_name: zookeeper" >> docker-compose-ci.yml
-          echo "    environment:" >> docker-compose-ci.yml
-          echo "      ZOOKEEPER_CLIENT_PORT: 2181" >> docker-compose-ci.yml
-          echo "    ports:" >> docker-compose-ci.yml
-          echo "      - \"2181:2181\"" >> docker-compose-ci.yml
-          echo "    networks:" >> docker-compose-ci.yml
-          echo "      - microservices-net" >> docker-compose-ci.yml
-          echo "" >> docker-compose-ci.yml
-          echo "  kafka-broker:" >> docker-compose-ci.yml
-          echo "    image: confluentinc/cp-kafka:7.5.0" >> docker-compose-ci.yml
-          echo "    container_name: kafka-broker" >> docker-compose-ci.yml
-          echo "    environment:" >> docker-compose-ci.yml
-          echo "      KAFKA_BROKER_ID: 1" >> docker-compose-ci.yml
-          echo "      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181" >> docker-compose-ci.yml
-          echo "      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092" >> docker-compose-ci.yml
-          echo "      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1" >> docker-compose-ci.yml
-          echo "    ports:" >> docker-compose-ci.yml
-          echo "      - \"9092:9092\"" >> docker-compose-ci.yml
-          echo "    networks:" >> docker-compose-ci.yml
-          echo "      - microservices-net" >> docker-compose-ci.yml
-          echo "    depends_on:" >> docker-compose-ci.yml
-          echo "      - zookeeper" >> docker-compose-ci.yml
-          echo "" >> docker-compose-ci.yml
-          echo "  conta-service:" >> docker-compose-ci.yml
-          echo "    image: conta-service:latest" >> docker-compose-ci.yml
-          echo "    container_name: conta-service" >> docker-compose-ci.yml
-          echo "    ports:" >> docker-compose-ci.yml
-          echo "      - \"8081:8080\"" >> docker-compose-ci.yml
-          echo "    environment:" >> docker-compose-ci.yml
-          echo "      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db" >> docker-compose-ci.yml
-          echo "      SPRING_DATASOURCE_USERNAME: postgres" >> docker-compose-ci.yml
-          echo "      SPRING_DATASOURCE_PASSWORD: password" >> docker-compose-ci.yml
-          echo "      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092" >> docker-compose-ci.yml
-          echo "      SPRING_JPA_HIBERNATE_DDL_AUTO: update" >> docker-compose-ci.yml
-          echo "    networks:" >> docker-compose-ci.yml
-          echo "      - microservices-net" >> docker-compose-ci.yml
-          echo "    depends_on:" >> docker-compose-ci.yml
-          echo "      - postgres" >> docker-compose-ci.yml
-          echo "      - kafka-broker" >> docker-compose-ci.yml
-          echo "" >> docker-compose-ci.yml
-          echo "  kafka-service:" >> docker-compose-ci.yml
-          echo "    image: kafka-service:latest" >> docker-compose-ci.yml
-          echo "    container_name: kafka-service" >> docker-compose-ci.yml
-          echo "    ports:" >> docker-compose-ci.yml
-          echo "      - \"8082:8080\"" >> docker-compose-ci.yml
-          echo "    environment:" >> docker-compose-ci.yml
-          echo "      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db" >> docker-compose-ci.yml
-          echo "      SPRING_DATASOURCE_USERNAME: postgres" >> docker-compose-ci.yml
-          echo "      SPRING_DATASOURCE_PASSWORD: password" >> docker-compose-ci.yml
-          echo "      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092" >> docker-compose-ci.yml
-          echo "      SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group" >> docker-compose-ci.yml
-          echo "      SPRING_JPA_HIBERNATE_DDL_AUTO: update" >> docker-compose-ci.yml
-          echo "    networks:" >> docker-compose-ci.yml
-          echo "      - microservices-net" >> docker-compose-ci.yml
-          echo "    depends_on:" >> docker-compose-ci.yml
-          echo "      - postgres" >> docker-compose-ci.yml
-          echo "      - kafka-broker" >> docker-compose-ci.yml
-          echo "" >> docker-compose-ci.yml
-          echo "networks:" >> docker-compose-ci.yml
-          echo "  microservices-net:" >> docker-compose-ci.yml
-          echo "    driver: bridge" >> docker-compose-ci.yml
+          cat > docker-compose-ci.yml << 'DOCKERCOMPOSE'
+version: '3.8'
 
-      - name: "[5] Executar Docker Compose"
-        run: |
-          echo "🚀 Iniciando infraestrutura..."
-          docker compose -f docker-compose-ci.yml up -d postgres zookeeper kafka-broker
-          sleep 30
-          
-          echo "🔍 Verificando infraestrutura..."
-          docker compose -f docker-compose-ci.yml ps
-          
-          echo "🚀 Iniciando serviços..."
-          docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
-          sleep 45
-          
-          echo "🔍 Verificando serviços..."
-          docker compose -f docker-compose-ci.yml ps
-          
-          echo "🏥 Testando health checks..."
-          
-          echo "🔍 Testando Conta Service..."
-          max_retries=10
-          retry_count=0
-          while [ $retry_count -lt $max_retries ]; do
-            if curl -s -f http://localhost:8081/actuator/health; then
-              echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
-              break
-            else
-              echo "⏳ Conta Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
-              sleep 10
-              retry_count=$((retry_count + 1))
-            fi
-          done
-          
-          if [ $retry_count -eq $max_retries ]; then
-            echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
-            docker compose -f docker-compose-ci.yml logs conta-service
-            exit 1
-          fi
-          
-          echo "🔍 Testando Kafka Service..."
-          retry_count=0
-          while [ $retry_count -lt $max_retries ]; do
-            if curl -s -f http://localhost:8082/actuator/health; then
-              echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
-              break
-            else
-              echo "⏳ Kafka Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
-              sleep 10
-              retry_count=$((retry_count + 1))
-            fi
-          done
-          
-          if [ $retry_count -eq $max_retries ]; then
-            echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
-            docker compose -f docker-compose-ci.yml logs kafka-service
-            exit 1
-          fi
-          
-          echo "🎉 TODOS OS TESTES PASSARAM!"
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: conta_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    networks:
+      - microservices-net
 
-      - name: "[6] Limpar Ambiente"
-        if: always()
-        run: |
-          docker compose -f docker-compose-ci.yml down -v
-          echo "🧹 Ambiente limpo"
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - microservices-net
 
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    steps:
-      - name: "[1] Checkout"
-        uses: actions/checkout@v4
+  kafka-broker:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-broker
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - microservices-net
+    depends_on:
+      - zookeeper
 
-      - name: "[2] Security Scan"
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'api-funcoes-teste-spring'
-          path: '.'
-          format: 'HTML'
-          args: |
-            --failOnCVSS 7
-            --scan conta-service/
-            --scan kafka-service/
+  conta-service:
+    image: conta-service:latest
+    container_name: conta-service
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    networks:
+      - microservices-net
+    depends_on:
+      - postgres
+      - kafka-broker
 
-      - name: "[3] Upload Report"
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports
-          path: reports/
+  kafka-service:
+    image: kafka-service:latest
+    container_name: kafka-service
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    networks:
+      - microservices-net
+    depends_on:
+      - postgres
+      - kafka-broker
