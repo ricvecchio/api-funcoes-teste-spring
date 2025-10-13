@@ -8,11 +8,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      # [1] Checkout do código
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # [2] Configurar JDK 21
       - name: "[2] Configurar JDK 21"
         uses: actions/setup-java@v4
         with:
@@ -20,13 +18,11 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      # [3] Build do projeto raiz
       - name: "[3] Build Projeto Raiz"
         run: |
           echo "🏗️  Building projeto raiz..."
           mvn clean install -DskipTests -q
 
-      # [4] Build Conta Service
       - name: "[4] Build Conta Service"
         run: |
           echo "🔧 Building Conta Service..."
@@ -34,7 +30,6 @@ jobs:
           mvn clean compile -DskipTests -q
           echo "✅ Conta Service compilado"
 
-      # [5] Build Kafka Service
       - name: "[5] Build Kafka Service"
         run: |
           echo "🔧 Building Kafka Service..."
@@ -46,15 +41,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
-      # [1] Checkout do código
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # [2] Configurar Docker Buildx
       - name: "[2] Configurar Docker Buildx"
         uses: docker/setup-buildx-action@v3
 
-      # [3] Build das imagens Docker
       - name: "[3] Build das Imagens Docker"
         run: |
           echo "🐳 Build das imagens Docker..."
@@ -62,10 +54,9 @@ jobs:
           docker build -t kafka-service:latest -f kafka-service/Dockerfile .
           echo "✅ Imagens Docker construídas"
 
-      # [4] Criar docker-compose.yml
       - name: "[4] Criar docker-compose.yml"
         run: |
-          cat << 'EOF' > docker-compose-ci.yml
+          cat > docker-compose-ci.yml << 'EOF'
           version: '3.8'
 
           services:
@@ -80,7 +71,7 @@ jobs:
                 - "5432:5432"
               networks:
                 - microservices-net
-          
+
             zookeeper:
               image: confluentinc/cp-zookeeper:7.5.0
               container_name: zookeeper
@@ -90,7 +81,7 @@ jobs:
                 - "2181:2181"
               networks:
                 - microservices-net
-          
+
             kafka-broker:
               image: confluentinc/cp-kafka:7.5.0
               container_name: kafka-broker
@@ -105,7 +96,7 @@ jobs:
                 - microservices-net
               depends_on:
                 - zookeeper
-          
+
             conta-service:
               image: conta-service:latest
               container_name: conta-service
@@ -122,7 +113,7 @@ jobs:
               depends_on:
                 - postgres
                 - kafka-broker
-          
+
             kafka-service:
               image: kafka-service:latest
               container_name: kafka-service
@@ -146,7 +137,6 @@ jobs:
               driver: bridge
           EOF
 
-      # [5] Executar Docker Compose e testes de health check
       - name: "[5] Executar Docker Compose"
         run: |
           echo "🚀 Iniciando infraestrutura..."
@@ -166,26 +156,46 @@ jobs:
           echo "🏥 Testando health checks..."
           
           echo "🔍 Testando Conta Service..."
-          if curl -s -f http://localhost:8081/actuator/health; then
-            echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
-          else
-            echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU"
+          max_retries=10
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if curl -s -f http://localhost:8081/actuator/health; then
+              echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
+              break
+            else
+              echo "⏳ Conta Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
+              sleep 10
+              retry_count=$((retry_count + 1))
+            fi
+          done
+          
+          if [ $retry_count -eq $max_retries ]; then
+            echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
             docker compose -f docker-compose-ci.yml logs conta-service
             exit 1
           fi
           
           echo "🔍 Testando Kafka Service..."
-          if curl -s -f http://localhost:8082/actuator/health; then
-            echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
-          else
-            echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU"
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if curl -s -f http://localhost:8082/actuator/health; then
+              echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
+              break
+            else
+              echo "⏳ Kafka Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
+              sleep 10
+              retry_count=$((retry_count + 1))
+            fi
+          done
+          
+          if [ $retry_count -eq $max_retries ]; then
+            echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
             docker compose -f docker-compose-ci.yml logs kafka-service
             exit 1
           fi
           
           echo "🎉 TODOS OS TESTES PASSARAM!"
 
-      # [6] Limpar ambiente
       - name: "[6] Limpar Ambiente"
         if: always()
         run: |
@@ -196,23 +206,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
-      # [1] Checkout do código
       - name: "[1] Checkout"
         uses: actions/checkout@v4
 
-      # [2] Security Scan com Dependency Check
       - name: "[2] Security Scan"
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'api-funcoes-teste-spring'
           path: '.'
           format: 'HTML'
-          args: >
+          args: |
             --failOnCVSS 7
             --scan conta-service/
             --scan kafka-service/
 
-      # [3] Upload do relatório de segurança
       - name: "[3] Upload Report"
         uses: actions/upload-artifact@v4
         with:
