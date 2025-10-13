@@ -15,15 +15,9 @@ jobs:
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # CORREÇÃO: Instalar Docker Compose diretamente
-      - name: "[2] Instalar Docker Compose"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io
-          sudo systemctl start docker
-          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
+      # CORREÇÃO: Usar ação oficial do Docker
+      - name: "[2] Setup Docker"
+        uses: docker/setup-buildx-action@v3
 
       - name: "[3] Configurar JDK 21"
         uses: actions/setup-java@v3
@@ -55,20 +49,20 @@ jobs:
           echo "🐳 Building Docker image..."
           docker build -t kafka-service:latest ./kafka-service
 
-      # CORREÇÃO: Usar docker-compose v1
+      # CORREÇÃO: Usar Docker Compose V2
       - name: "[8] Testar com Docker Compose"
         run: |
           echo "🐳 Testando com Docker Compose..."
           cd infra
-          docker-compose up -d kafka-service postgres kafka-broker zookeeper
+          docker compose up -d kafka-service postgres kafka-broker zookeeper
           sleep 30
-          docker-compose logs kafka-service --tail=20
-          docker-compose ps
+          docker compose logs kafka-service --tail=20
+          docker compose ps
           
           # Teste básico de saúde
           timeout 10s bash -c 'until curl -f http://localhost:8082/actuator/health; do sleep 2; done' || echo "Kafka Service não responde"
           
-          docker-compose down
+          docker compose down
 
       - name: "[9] Deploy via SSH"
         run: echo "✅ Build e testes do Kafka Service concluídos - Pronto para deploy"
