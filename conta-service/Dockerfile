@@ -3,10 +3,10 @@ FROM maven:3.9.8-eclipse-temurin-21 AS build
 
 WORKDIR /workspace
 
-# Copiar projeto completo
+# Copiar projeto completo para resolver dependências
 COPY .. .
 
-# Build do projeto raiz
+# Build do projeto raiz primeiro
 RUN mvn -f /workspace/pom.xml clean install -DskipTests -q
 
 # Build do microserviço
@@ -20,14 +20,6 @@ WORKDIR /app
 # Copiar JAR
 COPY --from=build /workspace/conta-service/target/*.jar app.jar
 
-# Expor porta
 EXPOSE 8080
 
-# Comando de execução com otimizações
-ENTRYPOINT ["java", \
-    "-Xmx512m", \
-    "-Xms256m", \
-    "-XX:+UseContainerSupport", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-jar", \
-    "app.jar"]
+ENTRYPOINT ["java", "-jar", "app.jar"]

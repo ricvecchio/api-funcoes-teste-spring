@@ -6,9 +6,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.kafka.annotation.EnableKafka;
 
 @SpringBootApplication
-@EnableKafka
 public class KafkaServiceApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(KafkaServiceApplication.class, args);
     }
