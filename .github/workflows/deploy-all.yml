@@ -13,70 +13,45 @@ jobs:
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      - name: "[2] Verificar estrutura do projeto"
-        run: |
-          echo "📁 Estrutura de diretórios:"
-          ls -la
-          echo "🔍 Verificando diretório infra:"
-          find . -name "docker-compose.yml" -type f
+      - name: "[2] Setup Docker Buildx"
+        uses: docker/setup-buildx-action@v3
 
-      # CORREÇÃO: Instalação correta do Docker para Ubuntu 24.04
-      - name: "[3] Instalar Docker"
-        run: |
-          echo "🐳 Instalando Docker..."
-          
-          # Adicionar repositório oficial do Docker
-          sudo apt-get update
-          sudo apt-get install -y ca-certificates curl
-          sudo install -m 0755 -d /etc/apt/keyrings
-          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          sudo chmod a+r /etc/apt/keyrings/docker.asc
-          
-          # Adicionar repositório
-          echo \
-            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-            $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-          
-          # Instalar Docker
-          sudo apt-get update
-          sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-          
-          # Adicionar usuário ao grupo docker (para evitar sudo)
-          sudo usermod -aG docker $USER
-          
-          # Verificar instalação
-          docker --version
-          docker compose version
-
-      - name: "[4] Configurar JDK 21"
+      - name: "[3] Configurar JDK 21"
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: "[5] Configurar Maven"
+      - name: "[4] Configurar Maven"
         run: |
           sudo apt-get update
           sudo apt-get install -y maven
-          mvn -version
 
       # Build Conta Service
-      - name: "[6] Build Conta Service"
+      - name: "[5] Build Conta Service"
         run: |
           echo "🏗️  Building Conta Service..."
           cd conta-service
           mvn clean compile -DskipTests
 
       # Build Kafka Service
-      - name: "[7] Build Kafka Service"
+      - name: "[6] Build Kafka Service"
         run: |
           echo "🏗️  Building Kafka Service..."
           cd kafka-service
           mvn clean compile -DskipTests
 
-      # CORREÇÃO: Usar Docker Compose V2 (docker compose) que já vem com Docker
-      - name: "[8] Docker Compose Up"
+      # CORREÇÃO: Adicionar passo para verificar Dockerfiles
+      - name: "[7] Verificar Dockerfiles"
+        run: |
+          echo "🔍 Verificando Dockerfiles..."
+          echo "=== Conta Service Dockerfile ==="
+          cat conta-service/Dockerfile
+          echo "=== Kafka Service Dockerfile ==="
+          cat kafka-service/Dockerfile
+
+      # CORREÇÃO: Usar build com cache para melhor performance
+      - name: "[8] Docker Compose Up com Build"
         run: |
           echo "🐳 Executando Docker Compose..."
           
@@ -86,13 +61,15 @@ jobs:
           
             echo "🚀 Iniciando serviços com Docker Compose..."
             docker compose version
-            docker compose up -d --build
+          
+            # Build com cache para melhor performance
+            docker compose build --no-cache
+          
+            # Subir serviços
+            docker compose up -d
           
             echo "📊 Status dos containers:"
             docker compose ps
-          
-            echo "📝 Logs dos serviços:"
-            docker compose logs --tail=20 || echo "Não foi possível obter logs"
           
           else
             echo "❌ infra/docker-compose.yml não encontrado"
@@ -109,14 +86,13 @@ jobs:
           docker compose ps
           
           echo "🔍 Verificando logs:"
-          docker compose logs --tail=50
+          docker compose logs --tail=20
           
-          # Testar conectividade
+          # Testar conectividade com timeout
           echo "🌐 Testando conectividade..."
-          timeout 10s bash -c 'until curl -f http://localhost:8081/actuator/health; do sleep 2; done' || echo "Conta Service não responde"
-          timeout 10s bash -c 'until curl -f http://localhost:8082/actuator/health; do sleep 2; done' || echo "Kafka Service não responde"
+          timeout 15s bash -c 'until curl -s -f http://localhost:8081/actuator/health; do echo "Aguardando Conta Service..."; sleep 3; done' || echo "Conta Service não responde"
+          timeout 15s bash -c 'until curl -s -f http://localhost:8082/actuator/health; do echo "Aguardando Kafka Service..."; sleep 3; done' || echo "Kafka Service não responde"
 
-      # Limpar recursos
       - name: "[10] Parar serviços"
         if: always()
         run: |

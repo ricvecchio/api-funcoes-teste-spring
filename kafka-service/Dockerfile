@@ -1,20 +1,23 @@
 # ===== Build Stage =====
-FROM ubuntu:latest AS build
-
-RUN apt-get update && \
-    apt-get install -y openjdk-21-jdk maven && \
-    apt-get clean
+# CORREÇÃO: Usar imagem Maven oficial com Alpine (mais leve)
+FROM maven:3.9.8-eclipse-temurin-21-alpine AS build
 
 WORKDIR /app
 
-COPY . .
+COPY pom.xml .
+COPY src ./src
 
-RUN mvn clean install -DskipTests
+RUN mvn clean package -DskipTests
 
 # ===== Runtime Stage =====
-FROM openjdk:21-jdk-slim
+# CORREÇÃO: Usar imagem JRE Alpine existente
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
+
+# Criar usuário não-root
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring
 
 EXPOSE 8080
 

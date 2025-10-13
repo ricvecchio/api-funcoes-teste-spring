@@ -1,29 +1,30 @@
 # ===== Build Stage =====
-# Usar imagem oficial Maven com Java 21 (CORREÇÃO: Imagem oficial)
-FROM maven:3.9.8-eclipse-temurin-21 AS build
+# Usar imagem oficial Maven com Java 21
+FROM maven:3.9.8-eclipse-temurin-21-alpine AS build
 
 WORKDIR /app
 
 # Copiar arquivos de configuração do Maven primeiro (para cache de dependências)
 COPY pom.xml .
+# Copiar código fonte
 COPY src ./src
 
-# Compilar e gerar JAR (CORREÇÃO: Usar perfil correto)
+# Compilar e gerar JAR
 RUN mvn clean package -DskipTests
 
 # ===== Runtime Stage =====
-# Imagem final leve apenas com JRE 21 (CORREÇÃO: Usar JRE slim)
-FROM eclipse-temurin:21-jre-slim
+# CORREÇÃO: Usar imagem existente do Eclipse Temurin
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-# Criar usuário não-root para segurança (BOA PRÁTICA)
-RUN groupadd -r spring && useradd -r -g spring spring
+# Criar usuário não-root para segurança
+RUN addgroup -S spring && adduser -S spring -G spring
 USER spring
 
 EXPOSE 8080
 
-# Copiar JAR gerado (CORREÇÃO: Caminho correto)
+# Copiar JAR gerado
 COPY --from=build /app/target/*.jar app.jar
 
 # Comando de execução
