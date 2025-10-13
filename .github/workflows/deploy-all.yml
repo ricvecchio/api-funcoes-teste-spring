@@ -10,23 +10,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Faz o checkout do código do repositório
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # Build Conta Service
-      - name: "[2] Build Conta Service"
+      # 2️⃣ Configura o Java 21 (necessário para Spring Boot 3.3+)
+      # Esse passo garante que o compilador do Maven use o JDK correto
+      - name: "[2] Configurar JDK 21"
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin' # Distribuição estável e amplamente usada
+          java-version: '21'
+
+      # 3️⃣ Instala Maven 3.10+ (compatível com Java 21)
+      # O Maven pré-instalado no runner pode estar desatualizado, então baixamos a versão recente
+      - name: "[3] Instalar Maven 3.10+"
+        run: |
+          MAVEN_VERSION=3.10.1
+          wget https://dlcdn.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
+          tar xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
+          sudo mv apache-maven-$MAVEN_VERSION /opt/maven
+          echo "export PATH=/opt/maven/bin:$PATH" >> $GITHUB_ENV
+          mvn -version
+
+      # 4️⃣ Build do microserviço Conta
+      # Este comando compila o módulo 'conta-service' e gera o arquivo JAR
+      - name: "[4] Build Conta Service"
         run: |
           cd conta-service
           mvn clean package -DskipTests
 
-      # Build Kafka Service
-      - name: "[3] Build Kafka Service"
+      # 5️⃣ Build do microserviço Kafka
+      # Compila e gera o JAR do módulo 'kafka-service'
+      - name: "[5] Build Kafka Service"
         run: |
           cd ../kafka-service
           mvn clean package -DskipTests
 
-      # Subir todos os serviços localmente (opcional)
-      - name: "[4] Docker Compose Up"
+      # 6️⃣ (Opcional) Subida dos containers Docker para teste de integração local
+      # Essa etapa sobe os dois serviços via docker-compose usando o arquivo em .infra
+      - name: "[6] Docker Compose Up"
         run: |
-          cd .infra
+          cd ../.infra
           docker-compose up -d --build
