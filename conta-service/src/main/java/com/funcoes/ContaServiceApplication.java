@@ -6,9 +6,9 @@ import org.springframework.cache.annotation.EnableCaching;
 
 @SpringBootApplication
 @EnableCaching
-public class RunContaApplication {
+public class ContaServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(RunContaApplication.class, args);
+        SpringApplication.run(ContaServiceApplication.class, args);
     }
 }

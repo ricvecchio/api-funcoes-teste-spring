@@ -3,12 +3,13 @@ package com.funcoes;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.kafka.annotation.EnableKafka;
 
 @SpringBootApplication
-@EnableCaching
-public class RunKafkaApplication {
+@EnableKafka
+public class KafkaServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(RunKafkaApplication.class, args);
+        SpringApplication.run(KafkaServiceApplication.class, args);
     }
 }
