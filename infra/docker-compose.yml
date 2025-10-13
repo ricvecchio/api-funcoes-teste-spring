@@ -4,7 +4,7 @@ services:
   # ===== Conta Service =====
   conta-service:
     build:
-      context: ../conta-service
+      context: ../conta-service  # CORREÇÃO: Caminho relativo correto
       dockerfile: Dockerfile
     image: conta-service:latest
     container_name: conta-service
@@ -12,18 +12,20 @@ services:
       - "8081:8080"
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: ${DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
     networks:
       - microservices-net
     depends_on:
-      - kafka-service
+      - postgres
+      - kafka-broker
 
   # ===== Kafka Service =====
   kafka-service:
     build:
-      context: ../kafka-service
+      context: ../kafka-service  # CORREÇÃO: Caminho relativo correto
       dockerfile: Dockerfile
     image: kafka-service:latest
     container_name: kafka-service
@@ -31,9 +33,59 @@ services:
       - "8082:8080"
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+    networks:
+      - microservices-net
+    depends_on:
+      - postgres
+      - kafka-broker
+
+  # ===== PostgreSQL =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: conta_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    networks:
+      - microservices-net
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ===== Kafka Broker =====
+  kafka-broker:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-broker
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - microservices-net
+    depends_on:
+      - zookeeper
+
+  # ===== Zookeeper =====
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
     networks:
       - microservices-net
 
 networks:
   microservices-net:
     driver: bridge
+
+volumes:
+  postgres_data:

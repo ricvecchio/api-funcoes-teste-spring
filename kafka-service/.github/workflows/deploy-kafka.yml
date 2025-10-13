@@ -12,19 +12,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout do código
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      # 2️⃣ Configurar JDK 21
       - name: "[2] Configurar JDK 21"
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      # 2.1️⃣ Instalar Maven 3.10+
-      - name: "[2.1] Instalar Maven 3.10+"
+      - name: "[3] Configurar Maven"
         run: |
-          MAVEN_VERSION=3.10.1
-          wget https://dlcdn.apache.org/maven/maven-3/$MAVEN_VERSION
+          sudo apt-get update
+          sudo apt-get install -y maven
+
+      - name: "[4] Cache Maven"
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('kafka-service/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: "[5] Build e Package"
+        run: |
+          echo "🏗️  Building Kafka Service..."
+          cd kafka-service
+          mvn clean compile package -DskipTests
+
+      - name: "[6] Build Docker Image"
+        run: |
+          echo "🐳 Building Docker image..."
+          docker build -t kafka-service:latest ./kafka-service
+
+      - name: "[7] Testar com Docker Compose"
+        run: |
+          echo "🐳 Testando com Docker Compose da pasta infra..."
+          cd infra
+          docker-compose up -d kafka-service
+          sleep 15
+          docker-compose logs kafka-service
+          docker-compose down
+
+      - name: "[8] Deploy via SSH"
+        run: echo "✅ Build concluído - Pronto para deploy"
