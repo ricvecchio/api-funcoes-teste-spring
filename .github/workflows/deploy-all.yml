@@ -56,86 +56,84 @@ jobs:
 
       - name: "[4] Criar docker-compose.yml"
         run: |
-          cat > docker-compose-ci.yml << 'EOF'
-          version: '3.8'
-
-          services:
-            postgres:
-              image: postgres:15-alpine
-              container_name: postgres-db
-              environment:
-                POSTGRES_DB: conta_db
-                POSTGRES_USER: postgres
-                POSTGRES_PASSWORD: password
-              ports:
-                - "5432:5432"
-              networks:
-                - microservices-net
-
-            zookeeper:
-              image: confluentinc/cp-zookeeper:7.5.0
-              container_name: zookeeper
-              environment:
-                ZOOKEEPER_CLIENT_PORT: 2181
-              ports:
-                - "2181:2181"
-              networks:
-                - microservices-net
-
-            kafka-broker:
-              image: confluentinc/cp-kafka:7.5.0
-              container_name: kafka-broker
-              environment:
-                KAFKA_BROKER_ID: 1
-                KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-                KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
-                KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-              ports:
-                - "9092:9092"
-              networks:
-                - microservices-net
-              depends_on:
-                - zookeeper
-
-            conta-service:
-              image: conta-service:latest
-              container_name: conta-service
-              ports:
-                - "8081:8080"
-              environment:
-                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-                SPRING_DATASOURCE_USERNAME: postgres
-                SPRING_DATASOURCE_PASSWORD: password
-                SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-                SPRING_JPA_HIBERNATE_DDL_AUTO: update
-              networks:
-                - microservices-net
-              depends_on:
-                - postgres
-                - kafka-broker
-
-            kafka-service:
-              image: kafka-service:latest
-              container_name: kafka-service
-              ports:
-                - "8082:8080"
-              environment:
-                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-                SPRING_DATASOURCE_USERNAME: postgres
-                SPRING_DATASOURCE_PASSWORD: password
-                SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-                SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
-                SPRING_JPA_HIBERNATE_DDL_AUTO: update
-              networks:
-                - microservices-net
-              depends_on:
-                - postgres
-                - kafka-broker
-
-          networks:
-            microservices-net:
-              driver: bridge
-          EOF
+          echo "version: '3.8'" > docker-compose-ci.yml
+          echo "" >> docker-compose-ci.yml
+          echo "services:" >> docker-compose-ci.yml
+          echo "  postgres:" >> docker-compose-ci.yml
+          echo "    image: postgres:15-alpine" >> docker-compose-ci.yml
+          echo "    container_name: postgres-db" >> docker-compose-ci.yml
+          echo "    environment:" >> docker-compose-ci.yml
+          echo "      POSTGRES_DB: conta_db" >> docker-compose-ci.yml
+          echo "      POSTGRES_USER: postgres" >> docker-compose-ci.yml
+          echo "      POSTGRES_PASSWORD: password" >> docker-compose-ci.yml
+          echo "    ports:" >> docker-compose-ci.yml
+          echo "      - \"5432:5432\"" >> docker-compose-ci.yml
+          echo "    networks:" >> docker-compose-ci.yml
+          echo "      - microservices-net" >> docker-compose-ci.yml
+          echo "" >> docker-compose-ci.yml
+          echo "  zookeeper:" >> docker-compose-ci.yml
+          echo "    image: confluentinc/cp-zookeeper:7.5.0" >> docker-compose-ci.yml
+          echo "    container_name: zookeeper" >> docker-compose-ci.yml
+          echo "    environment:" >> docker-compose-ci.yml
+          echo "      ZOOKEEPER_CLIENT_PORT: 2181" >> docker-compose-ci.yml
+          echo "    ports:" >> docker-compose-ci.yml
+          echo "      - \"2181:2181\"" >> docker-compose-ci.yml
+          echo "    networks:" >> docker-compose-ci.yml
+          echo "      - microservices-net" >> docker-compose-ci.yml
+          echo "" >> docker-compose-ci.yml
+          echo "  kafka-broker:" >> docker-compose-ci.yml
+          echo "    image: confluentinc/cp-kafka:7.5.0" >> docker-compose-ci.yml
+          echo "    container_name: kafka-broker" >> docker-compose-ci.yml
+          echo "    environment:" >> docker-compose-ci.yml
+          echo "      KAFKA_BROKER_ID: 1" >> docker-compose-ci.yml
+          echo "      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181" >> docker-compose-ci.yml
+          echo "      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092" >> docker-compose-ci.yml
+          echo "      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1" >> docker-compose-ci.yml
+          echo "    ports:" >> docker-compose-ci.yml
+          echo "      - \"9092:9092\"" >> docker-compose-ci.yml
+          echo "    networks:" >> docker-compose-ci.yml
+          echo "      - microservices-net" >> docker-compose-ci.yml
+          echo "    depends_on:" >> docker-compose-ci.yml
+          echo "      - zookeeper" >> docker-compose-ci.yml
+          echo "" >> docker-compose-ci.yml
+          echo "  conta-service:" >> docker-compose-ci.yml
+          echo "    image: conta-service:latest" >> docker-compose-ci.yml
+          echo "    container_name: conta-service" >> docker-compose-ci.yml
+          echo "    ports:" >> docker-compose-ci.yml
+          echo "      - \"8081:8080\"" >> docker-compose-ci.yml
+          echo "    environment:" >> docker-compose-ci.yml
+          echo "      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db" >> docker-compose-ci.yml
+          echo "      SPRING_DATASOURCE_USERNAME: postgres" >> docker-compose-ci.yml
+          echo "      SPRING_DATASOURCE_PASSWORD: password" >> docker-compose-ci.yml
+          echo "      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092" >> docker-compose-ci.yml
+          echo "      SPRING_JPA_HIBERNATE_DDL_AUTO: update" >> docker-compose-ci.yml
+          echo "    networks:" >> docker-compose-ci.yml
+          echo "      - microservices-net" >> docker-compose-ci.yml
+          echo "    depends_on:" >> docker-compose-ci.yml
+          echo "      - postgres" >> docker-compose-ci.yml
+          echo "      - kafka-broker" >> docker-compose-ci.yml
+          echo "" >> docker-compose-ci.yml
+          echo "  kafka-service:" >> docker-compose-ci.yml
+          echo "    image: kafka-service:latest" >> docker-compose-ci.yml
+          echo "    container_name: kafka-service" >> docker-compose-ci.yml
+          echo "    ports:" >> docker-compose-ci.yml
+          echo "      - \"8082:8080\"" >> docker-compose-ci.yml
+          echo "    environment:" >> docker-compose-ci.yml
+          echo "      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db" >> docker-compose-ci.yml
+          echo "      SPRING_DATASOURCE_USERNAME: postgres" >> docker-compose-ci.yml
+          echo "      SPRING_DATASOURCE_PASSWORD: password" >> docker-compose-ci.yml
+          echo "      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092" >> docker-compose-ci.yml
+          echo "      SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group" >> docker-compose-ci.yml
+          echo "      SPRING_JPA_HIBERNATE_DDL_AUTO: update" >> docker-compose-ci.yml
+          echo "    networks:" >> docker-compose-ci.yml
+          echo "      - microservices-net" >> docker-compose-ci.yml
+          echo "    depends_on:" >> docker-compose-ci.yml
+          echo "      - postgres" >> docker-compose-ci.yml
+          echo "      - kafka-broker" >> docker-compose-ci.yml
+          echo "" >> docker-compose-ci.yml
+          echo "networks:" >> docker-compose-ci.yml
+          echo "  microservices-net:" >> docker-compose-ci.yml
+          echo "    driver: bridge" >> docker-compose-ci.yml
 
       - name: "[5] Executar Docker Compose"
         run: |
