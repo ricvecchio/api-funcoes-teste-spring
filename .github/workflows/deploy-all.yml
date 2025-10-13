@@ -26,8 +26,8 @@ jobs:
       # O Maven pré-instalado no runner pode estar desatualizado, então baixamos a versão recente
       - name: "[3] Instalar Maven 3.10+"
         run: |
-          MAVEN_VERSION=3.10.1
-          wget https://dlcdn.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
+          MAVEN_VERSION=3.9.9
+          wget https://dlcdn.apache.org/maven/maven-3/${MAVEN_VERSION%.*}/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
           tar xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
           sudo mv apache-maven-$MAVEN_VERSION /opt/maven
           echo "export PATH=/opt/maven/bin:$PATH" >> $GITHUB_ENV
