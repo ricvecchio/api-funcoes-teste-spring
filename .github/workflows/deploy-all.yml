@@ -43,7 +43,7 @@ jobs:
   docker-integration:
     runs-on: ubuntu-latest
     needs: build-and-test
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: "[1] Checkout do código"
@@ -58,14 +58,12 @@ jobs:
           
           echo "🔨 Build Conta Service..."
           docker build \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
             -t conta-service:latest \
             -f conta-service/Dockerfile \
             .
           
           echo "🔨 Build Kafka Service..."
           docker build \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
             -t kafka-service:latest \
             -f kafka-service/Dockerfile \
             .
@@ -77,109 +75,142 @@ jobs:
           echo "🚀 Iniciando infraestrutura..."
           cd infra
           
-          # Parar qualquer container existente
+          # Limpar ambiente anterior
           docker compose down -v --remove-orphans
           
-          # Build e startup
-          docker compose build --no-cache
-          docker compose up -d
+          # Iniciar apenas infraestrutura primeiro
+          docker compose up -d postgres zookeeper kafka-broker
           
-          echo "⏳ Aguardando inicialização da infraestrutura..."
-          sleep 45
+          echo "⏳ Aguardando infraestrutura ficar pronta..."
+          sleep 60
 
       - name: "[5] Verificar Infraestrutura"
         run: |
           echo "🔍 Verificando infraestrutura..."
           cd infra
           
-          echo "📊 Status dos containers:"
+          echo "📊 Status dos containers de infra:"
           docker compose ps
           
-          echo "🔧 Logs da infraestrutura:"
-          docker compose logs --tail=20
+          # Verificar se todos os serviços de infra estão saudáveis
+          echo "🏥 Verificando saúde da infraestrutura..."
+          docker compose logs postgres --tail=5
+          docker compose logs zookeeper --tail=5
+          docker compose logs kafka-broker --tail=10
 
-      - name: "[6] Aguardar Serviços Spring Boot"
+      - name: "[6] Iniciar Microserviços"
         run: |
-          echo "⏳ Aguardando serviços Spring Boot..."
+          echo "🚀 Iniciando microserviços..."
           cd infra
           
-          # Aguardar até 2 minutos para serviços iniciarem
-          timeout 120s bash -c '
-            until docker compose logs conta-service | grep -q "Started"; do
-              echo "🔄 Aguardando Conta Service..."
-              sleep 10
-            done
-            echo "✅ Conta Service iniciado"
-          ' || echo "⚠️  Timeout aguardando Conta Service"
+          # Iniciar microserviços após infra estar pronta
+          docker compose up -d conta-service kafka-service
           
-          timeout 120s bash -c '
-            until docker compose logs kafka-service | grep -q "Started"; do
-              echo "🔄 Aguardando Kafka Service..."
-              sleep 10
-            done
-            echo "✅ Kafka Service iniciado"
-          ' || echo "⚠️  Timeout aguardando Kafka Service"
+          echo "⏳ Aguardando microserviços iniciarem..."
+          sleep 90
 
-      - name: "[7] Testar Health Checks"
+      - name: "[7] Verificar Logs dos Microserviços"
         run: |
-          echo "🏥 Testando health checks..."
+          echo "📝 Verificando logs dos microserviços..."
           cd infra
           
-          # Testar com retry e timeout
-          echo "🔍 Testando Conta Service..."
-          for i in {1..10}; do
-            if curl -s -f http://localhost:8081/actuator/health > /dev/null 2>&1; then
-              echo "✅ Conta Service HEALTHY"
-              break
-            else
-              echo "⏳ Tentativa $i/10: Conta Service não responde..."
-              sleep 10
-            fi
-          done
+          echo "=== LOGS CONTA SERVICE ==="
+          docker compose logs conta-service --tail=50
           
-          echo "🔍 Testando Kafka Service..."
-          for i in {1..10}; do
-            if curl -s -f http://localhost:8082/actuator/health > /dev/null 2>&1; then
-              echo "✅ Kafka Service HEALTHY"
-              break
-            else
-              echo "⏳ Tentativa $i/10: Kafka Service não responde..."
-              sleep 10
-            fi
-          done
+          echo "=== LOGS KAFKA SERVICE ==="
+          docker compose logs kafka-service --tail=50
           
-          # Teste final obrigatório
-          echo "🎯 Teste final de health checks..."
-          if curl -f http://localhost:8081/actuator/health; then
-            echo "✅✅ CONTA SERVICE: HEALTH CHECK PASSOU"
+          echo "📊 Status final dos containers:"
+          docker compose ps
+
+      - name: "[8] Testar Health Checks com Abordagem Robusta"
+        run: |
+          echo "🏥 Testando health checks com abordagem robusta..."
+          cd infra
+          
+          # Função para testar health check com retry
+          test_health_check() {
+            local service_name=$1
+            local port=$2
+            local max_attempts=15
+            local attempt=1
+          
+            echo "🔍 Testando $service_name na porta $port..."
+          
+            while [ $attempt -le $max_attempts ]; do
+              if curl -s -f "http://localhost:$port/actuator/health" > /dev/null 2>&1; then
+                echo "✅✅ $service_name: HEALTHY (tentativa $attempt)"
+                return 0
+              else
+                echo "⏳ $service_name: Aguardando... tentativa $attempt/$max_attempts"
+                sleep 10
+                attempt=$((attempt + 1))
+              fi
+            done
+          
+            echo "❌❌ $service_name: HEALTH CHECK FALHOU após $max_attempts tentativas"
+            return 1
+          }
+          
+          # Testar serviços
+          if test_health_check "Conta Service" "8081"; then
+            echo "🎯 CONTA SERVICE: TESTE DE SAÚDE PASSOU"
           else
-            echo "❌❌ CONTA SERVICE: HEALTH CHECK FALHOU"
+            echo "💥 CONTA SERVICE: TESTE DE SAÚDE FALHOU"
+            # Coletar logs detalhados antes de falhar
+            docker compose logs conta-service --tail=100
             exit 1
           fi
           
-          if curl -f http://localhost:8082/actuator/health; then
-            echo "✅✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
+          if test_health_check "Kafka Service" "8082"; then
+            echo "🎯 KAFKA SERVICE: TESTE DE SAÚDE PASSOU"
           else
-            echo "❌❌ KAFKA SERVICE: HEALTH CHECK FALHOU"
+            echo "💥 KAFKA SERVICE: TESTE DE SAÚDE FALHOU"
+            # Coletar logs detalhados antes de falhar
+            docker compose logs kafka-service --tail=100
             exit 1
           fi
+          
+          echo "🎉🎉 TODOS OS SERVIÇOS ESTÃO SAUDÁVEIS!"
 
-      - name: "[8] Coletar Logs em Caso de Falha"
+      - name: "[9] Testes Adicionais de Funcionalidade"
+        if: success()
+        run: |
+          echo "🧪 Executando testes adicionais de funcionalidade..."
+          cd infra
+          
+          # Testar endpoints específicos
+          echo "🔍 Testando endpoints de info..."
+          curl -s http://localhost:8081/actuator/info | jq '.' || echo "Info endpoint não disponível"
+          curl -s http://localhost:8082/actuator/info | jq '.' || echo "Info endpoint não disponível"
+          
+          echo "✅ Testes adicionais concluídos"
+
+      - name: "[10] Coletar Logs em Caso de Falha"
         if: failure()
         run: |
-          echo "📝 Coletando logs para análise..."
+          echo "📝 Coletando logs detalhados para análise..."
           cd infra
           
-          docker compose logs > all-logs.txt
-          docker compose logs conta-service > conta-logs.txt
-          docker compose logs kafka-service > kafka-logs.txt
+          # Salvar todos os logs
+          docker compose logs > docker-compose-full-logs.txt
+          docker compose logs conta-service > conta-service-full-logs.txt
+          docker compose logs kafka-service > kafka-service-full-logs.txt
+          docker compose logs kafka-broker > kafka-broker-full-logs.txt
+          docker compose logs postgres > postgres-full-logs.txt
           
-          echo "=== CONTA SERVICE LOGS ==="
-          tail -100 conta-logs.txt
-          echo "=== KAFKA SERVICE LOGS ==="
-          tail -100 kafka-logs.txt
+          # Exibir resumo dos logs
+          echo "=== RESUMO DOS LOGS ==="
+          echo "CONTA SERVICE (últimas 50 linhas):"
+          tail -50 conta-service-full-logs.txt
+          echo ""
+          echo "KAFKA SERVICE (últimas 50 linhas):"
+          tail -50 kafka-service-full-logs.txt
+          echo ""
+          echo "KAFKA BROKER (últimas 30 linhas):"
+          tail -30 kafka-broker-full-logs.txt
 
-      - name: "[9] Limpar Ambiente"
+      - name: "[11] Limpar Ambiente"
         if: always()
         run: |
           cd infra
