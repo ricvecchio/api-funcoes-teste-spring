@@ -15,8 +15,15 @@ jobs:
       - name: "[1] Checkout do código"
         uses: actions/checkout@v4
 
-      - name: "[2] Setup Docker Compose"
-        uses: docker/setup-compose-action@v3
+      # CORREÇÃO: Instalar Docker Compose diretamente
+      - name: "[2] Instalar Docker Compose"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+          sudo systemctl start docker
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
 
       - name: "[3] Configurar JDK 21"
         uses: actions/setup-java@v3
@@ -48,15 +55,16 @@ jobs:
           echo "🐳 Building Docker image..."
           docker build -t conta-service:latest ./conta-service
 
+      # CORREÇÃO: Usar docker-compose v1
       - name: "[8] Testar com Docker Compose"
         run: |
           echo "🐳 Testando com Docker Compose..."
           cd infra
-          docker compose up -d conta-service postgres kafka-broker
+          docker-compose up -d conta-service postgres kafka-broker zookeeper
           sleep 30
-          docker compose logs conta-service --tail=20
-          docker compose ps
-          docker compose down
+          docker-compose logs conta-service --tail=20
+          docker-compose ps
+          docker-compose down
 
       - name: "[9] Deploy via SSH"
         run: echo "✅ Build e testes concluídos - Pronto para deploy"
