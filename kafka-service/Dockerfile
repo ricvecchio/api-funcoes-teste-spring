@@ -1,16 +1,18 @@
 # ===== Build Stage =====
-# CORREÇÃO: Usar imagem Maven oficial com Alpine (mais leve)
 FROM maven:3.9.8-eclipse-temurin-21-alpine AS build
 
 WORKDIR /app
 
-COPY pom.xml .
-COPY src ./src
+# CORREÇÃO: Copiar projeto completo
+COPY .. .
 
-RUN mvn clean package -DskipTests
+# CORREÇÃO: Build do projeto raiz primeiro
+RUN mvn -f pom.xml clean install -DskipTests
+
+# CORREÇÃO: Build do microserviço específico
+RUN mvn -f kafka-service/pom.xml clean package -DskipTests
 
 # ===== Runtime Stage =====
-# CORREÇÃO: Usar imagem JRE Alpine existente
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
@@ -21,6 +23,7 @@ USER spring
 
 EXPOSE 8080
 
-COPY --from=build /app/target/*.jar app.jar
+# CORREÇÃO: Copiar JAR do microserviço específico
+COPY --from=build /app/kafka-service/target/*.jar app.jar
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

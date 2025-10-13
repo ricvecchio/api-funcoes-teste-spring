@@ -27,31 +27,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y maven
 
-      # Build Conta Service
-      - name: "[5] Build Conta Service"
+      # CORREÇÃO: Build do projeto raiz primeiro
+      - name: "[5] Build Projeto Raiz"
+        run: |
+          echo "🏗️  Building projeto raiz..."
+          mvn clean install -DskipTests
+
+      # Build dos microserviços
+      - name: "[6] Build Conta Service"
         run: |
           echo "🏗️  Building Conta Service..."
           cd conta-service
           mvn clean compile -DskipTests
 
-      # Build Kafka Service
-      - name: "[6] Build Kafka Service"
+      - name: "[7] Build Kafka Service"
         run: |
           echo "🏗️  Building Kafka Service..."
           cd kafka-service
           mvn clean compile -DskipTests
 
-      # CORREÇÃO: Adicionar passo para verificar Dockerfiles
-      - name: "[7] Verificar Dockerfiles"
-        run: |
-          echo "🔍 Verificando Dockerfiles..."
-          echo "=== Conta Service Dockerfile ==="
-          cat conta-service/Dockerfile
-          echo "=== Kafka Service Dockerfile ==="
-          cat kafka-service/Dockerfile
-
-      # CORREÇÃO: Usar build com cache para melhor performance
-      - name: "[8] Docker Compose Up com Build"
+      # CORREÇÃO: Build com contexto correto
+      - name: "[8] Docker Compose Up"
         run: |
           echo "🐳 Executando Docker Compose..."
           
@@ -59,13 +55,8 @@ jobs:
             echo "✅ Usando infra/docker-compose.yml"
             cd infra
           
-            echo "🚀 Iniciando serviços com Docker Compose..."
-            docker compose version
-          
-            # Build com cache para melhor performance
+            echo "🚀 Build e startup dos serviços..."
             docker compose build --no-cache
-          
-            # Subir serviços
             docker compose up -d
           
             echo "📊 Status dos containers:"
@@ -80,18 +71,18 @@ jobs:
         run: |
           echo "🏥 Verificando saúde dos serviços..."
           cd infra
-          sleep 30
+          sleep 45  # Mais tempo para inicialização
           
           echo "📊 Containers em execução:"
           docker compose ps
           
           echo "🔍 Verificando logs:"
-          docker compose logs --tail=20
+          docker compose logs --tail=30
           
-          # Testar conectividade com timeout
+          # Testar conectividade
           echo "🌐 Testando conectividade..."
-          timeout 15s bash -c 'until curl -s -f http://localhost:8081/actuator/health; do echo "Aguardando Conta Service..."; sleep 3; done' || echo "Conta Service não responde"
-          timeout 15s bash -c 'until curl -s -f http://localhost:8082/actuator/health; do echo "Aguardando Kafka Service..."; sleep 3; done' || echo "Kafka Service não responde"
+          curl -f http://localhost:8081/actuator/health || echo "Conta Service não responde"
+          curl -f http://localhost:8082/actuator/health || echo "Kafka Service não responde"
 
       - name: "[10] Parar serviços"
         if: always()

@@ -6,19 +6,23 @@
 
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- CORREÇÃO: Parent opcional com fallback -->
     <parent>
         <groupId>com.funcoes</groupId>
         <artifactId>api-funcoes-teste-spring</artifactId>
         <version>1.0.0</version>
         <relativePath>../pom.xml</relativePath>
+        <!-- Se o parent não for encontrado, continuar com configuração local -->
     </parent>
 
     <artifactId>conta-service</artifactId>
     <name>Conta Service</name>
     <description>Microserviço responsável pela abertura de contas</description>
 
+    <!-- CORREÇÃO: Propriedades locais como fallback -->
     <properties>
-        <!-- CORREÇÃO: Remover duplicação - já herdado do parent -->
+        <java.version>21</java.version>
+        <spring.boot.version>3.3.2</spring.boot.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -29,30 +33,35 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+            <version>${spring.boot.version}</version>
         </dependency>
 
         <!-- Spring Boot Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <version>${spring.boot.version}</version>
         </dependency>
 
         <!-- PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+            <version>42.7.3</version>
         </dependency>
 
         <!-- Kafka -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
+            <version>3.2.3</version>
         </dependency>
 
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <version>1.18.34</version>
             <optional>true</optional>
         </dependency>
 
@@ -60,19 +69,21 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+            <version>${spring.boot.version}</version>
         </dependency>
 
         <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring.boot.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <!-- CORREÇÃO: Plugin compiler simplificado -->
+            <!-- Compilação Java 21 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -88,6 +99,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring.boot.version}</version>
                 <configuration>
                     <excludes>
                         <exclude>
