@@ -1,13 +1,63 @@
-name: CI Integração Microserviços
+name: CI/CD Microserviços
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}
 
 jobs:
-  build_all:
+  # Job de Build e Testes
+  build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [conta-service, kafka-service]
+
+    steps:
+      - name: "[1] Checkout do código"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "[2] Configurar JDK 21"
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: "[3] Build Projeto Raiz"
+        run: |
+          echo "🏗️  Building projeto raiz..."
+          mvn clean install -DskipTests
+
+      - name: "[4] Build ${{ matrix.service }}"
+        run: |
+          echo "🔧 Building ${{ matrix.service }}..."
+          cd ${{ matrix.service }}
+          mvn clean compile -DskipTests
+
+      - name: "[5] Testes ${{ matrix.service }}"
+        run: |
+          echo "🧪 Executando testes ${{ matrix.service }}..."
+          cd ${{ matrix.service }}
+          mvn test
+
+      - name: "[6] Package ${{ matrix.service }}"
+        run: |
+          echo "📦 Packaging ${{ matrix.service }}..."
+          cd ${{ matrix.service }}
+          mvn package -DskipTests
+
+  # Job de Integração com Docker
+  docker-integration:
+    runs-on: ubuntu-latest
+    needs: build-and-test
 
     steps:
       - name: "[1] Checkout do código"
@@ -16,77 +66,70 @@ jobs:
       - name: "[2] Setup Docker Buildx"
         uses: docker/setup-buildx-action@v3
 
-      - name: "[3] Configurar JDK 21"
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: "[4] Configurar Maven"
+      - name: "[3] Build Projeto Raiz para Docker"
         run: |
-          sudo apt-get update
-          sudo apt-get install -y maven
-
-      # CORREÇÃO: Build do projeto raiz primeiro
-      - name: "[5] Build Projeto Raiz"
-        run: |
-          echo "🏗️  Building projeto raiz..."
+          echo "🏗️  Building projeto raiz para Docker..."
           mvn clean install -DskipTests
 
-      # Build dos microserviços
-      - name: "[6] Build Conta Service"
-        run: |
-          echo "🏗️  Building Conta Service..."
-          cd conta-service
-          mvn clean compile -DskipTests
-
-      - name: "[7] Build Kafka Service"
-        run: |
-          echo "🏗️  Building Kafka Service..."
-          cd kafka-service
-          mvn clean compile -DskipTests
-
-      # CORREÇÃO: Build com contexto correto
-      - name: "[8] Docker Compose Up"
+      - name: "[4] Build e Testar com Docker Compose"
         run: |
           echo "🐳 Executando Docker Compose..."
-          
-          if [ -d "infra" ] && [ -f "infra/docker-compose.yml" ]; then
-            echo "✅ Usando infra/docker-compose.yml"
-            cd infra
-          
-            echo "🚀 Build e startup dos serviços..."
-            docker compose build --no-cache
-            docker compose up -d
-          
-            echo "📊 Status dos containers:"
-            docker compose ps
-          
-          else
-            echo "❌ infra/docker-compose.yml não encontrado"
-            exit 1
-          fi
-
-      - name: "[9] Verificar saúde dos serviços"
-        run: |
-          echo "🏥 Verificando saúde dos serviços..."
           cd infra
-          sleep 45  # Mais tempo para inicialização
           
-          echo "📊 Containers em execução:"
+          # Build das imagens
+          docker compose build --no-cache --progress=plain
+          
+          # Subir serviços
+          docker compose up -d
+          
+          echo "⏳ Aguardando inicialização dos serviços..."
+          sleep 60
+          
+          # Verificar status
+          echo "📊 Status dos containers:"
           docker compose ps
           
-          echo "🔍 Verificando logs:"
-          docker compose logs --tail=30
+          # Health checks
+          echo "🏥 Verificando saúde dos serviços..."
+          docker compose logs --tail=50
           
-          # Testar conectividade
-          echo "🌐 Testando conectividade..."
-          curl -f http://localhost:8081/actuator/health || echo "Conta Service não responde"
-          curl -f http://localhost:8082/actuator/health || echo "Kafka Service não responde"
+          # Testar serviços
+          echo "🧪 Testando conectividade..."
+          curl -f http://localhost:8081/actuator/health || (echo "❌ Conta Service falhou" && exit 1)
+          curl -f http://localhost:8082/actuator/health || (echo "❌ Kafka Service falhou" && exit 1)
+          
+          echo "✅ Todos os serviços estão respondendo!"
 
-      - name: "[10] Parar serviços"
+      - name: "[5] Parar serviços"
         if: always()
         run: |
           cd infra
           docker compose down
           echo "🧹 Serviços parados"
+
+  # Job de Security Scan (Opcional)
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - name: "[1] Checkout do código"
+        uses: actions/checkout@v4
+
+      - name: "[2] Dependency Check"
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'api-funcoes-teste-spring'
+          path: '.'
+          format: 'HTML'
+          args: >
+            --failOnCVSS 7
+            --scan conta-service/
+            --scan kafka-service/
+            --enableRetired
+
+      - name: "[3] Upload Report"
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports/
