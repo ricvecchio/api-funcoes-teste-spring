@@ -1,78 +1,7 @@
-version: '3.9'
+version: '3.8'
 
 services:
-  # ===== Conta Service =====
-  conta-service:
-    build:
-      context: ..
-      dockerfile: conta-service/Dockerfile
-    image: conta-service:latest
-    container_name: conta-service
-    ports:
-      - "8081:8080"
-    environment:
-      # Spring Profiles
-      SPRING_PROFILES_ACTIVE: docker
-      # Database
-      DB_URL: jdbc:postgresql://postgres:5432/conta_db
-      DB_USER: postgres
-      DB_PASS: password
-      # Kafka
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      # Actuator
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
-    networks:
-      - microservices-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka-broker:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-
-  # ===== Kafka Service =====
-  kafka-service:
-    build:
-      context: ..
-      dockerfile: kafka-service/Dockerfile
-    image: kafka-service:latest
-    container_name: kafka-service
-    ports:
-      - "8082:8080"
-    environment:
-      # Spring Profiles
-      SPRING_PROFILES_ACTIVE: docker
-      # Database
-      DB_URL: jdbc:postgresql://postgres:5432/conta_db
-      DB_USER: postgres
-      DB_PASS: password
-      # Kafka
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      KAFKA_GROUP_ID: kafka-service-group
-      # Actuator
-      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
-    networks:
-      - microservices-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka-broker:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-
-  # ===== PostgreSQL Database =====
+  # ===== Database =====
   postgres:
     image: postgres:15-alpine
     container_name: postgres-db
@@ -86,40 +15,12 @@ services:
       - microservices-net
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ===== Kafka Broker =====
-  kafka-broker:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: kafka-broker
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-    ports:
-      - "9092:9092"
-    networks:
-      - microservices-net
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "localhost:9092"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
+      retries: 10
+      start_period: 10s
 
   # ===== Zookeeper =====
   zookeeper:
@@ -134,26 +35,104 @@ services:
       - microservices-net
     healthcheck:
       test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
-      interval: 30s
+      interval: 10s
       timeout: 5s
-      retries: 3
-    restart: unless-stopped
+      retries: 5
 
-  # ===== Kafka UI (Opcional - para monitoramento) =====
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    ports:
-      - "8080:8080"
+  # ===== Kafka Broker =====
+  kafka-broker:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-broker
     environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker:9092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_MS: 300000
+    ports:
+      - "9092:9092"
     networks:
       - microservices-net
     depends_on:
-      - kafka-broker
-    restart: unless-stopped
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ===== Conta Service =====
+  conta-service:
+    image: conta-service:latest
+    build:
+      context: ..
+      dockerfile: conta-service/Dockerfile
+    container_name: conta-service
+    ports:
+      - "8081:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
+      LOGGING_LEVEL_COM_FUNCOES: DEBUG
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: INFO
+    networks:
+      - microservices-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ===== Kafka Service =====
+  kafka-service:
+    image: kafka-service:latest
+    build:
+      context: ..
+      dockerfile: kafka-service/Dockerfile
+    container_name: kafka-service
+    ports:
+      - "8082:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics
+      LOGGING_LEVEL_COM_FUNCOES: DEBUG
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: DEBUG
+    networks:
+      - microservices-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
 networks:
   microservices-net:

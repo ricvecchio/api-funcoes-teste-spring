@@ -1,49 +1,46 @@
 # ===== Build Stage =====
-# Usar imagem oficial Maven com Java 21 para build
-FROM maven:3.9.8-eclipse-temurin-21-alpine AS build
+FROM maven:3.9.8-eclipse-temurin-21 AS build
 
 WORKDIR /workspace
 
-# Copiar projeto completo para resolver dependências do parent POM
+# Copiar projeto completo para resolver dependências
 COPY .. .
 
-# Build do projeto raiz primeiro para instalar o parent POM no repositório local
-RUN mvn -f /workspace/pom.xml clean install -DskipTests
+# Build do projeto raiz primeiro
+RUN mvn -f /workspace/pom.xml clean install -DskipTests -q
 
-# Agora build do microserviço específico
-RUN mvn -f /workspace/kafka-service/pom.xml clean package -DskipTests
+# Build do microserviço
+RUN mvn -f /workspace/kafka-service/pom.xml clean package -DskipTests -q
 
 # ===== Runtime Stage =====
-# Imagem final leve com JRE 21 Alpine
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
 
-# Metadados da imagem
-LABEL maintainer="sua-equipe@empresa.com"
-LABEL description="Microserviço de Processamento Kafka"
+# Metadados
+LABEL maintainer="dev-team@company.com"
 LABEL version="1.0.0"
+LABEL description="Kafka Service Microservice"
 
 WORKDIR /app
 
-# Criar usuário não-root para segurança (Boa Prática)
-RUN addgroup -S spring && adduser -S spring -G spring
+# Criar usuário não-root
+RUN groupadd -r spring && useradd -r -g spring spring
 
 # Mudar para usuário não-root
 USER spring
 
-# Expor porta da aplicação
+# Expor porta
 EXPOSE 8080
 
-# Health check (Boa Prática para Orchestration)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-# Copiar JAR gerado do stage de build
+# Copiar JAR
 COPY --from=build --chown=spring:spring /workspace/kafka-service/target/*.jar app.jar
 
-# Comando de execução com otimizações JVM para containers
-ENTRYPOINT ["java", \
-    "-Djava.security.egd=file:/dev/./urandom", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-jar", \
-    "app.jar"]
+# Variáveis de ambiente para otimização
+ENV JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -Dfile.encoding=UTF-8"
+ENV SPRING_PROFILES_ACTIVE="docker"
+
+# Comando de execução
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
