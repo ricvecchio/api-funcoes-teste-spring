@@ -22,9 +22,8 @@ jobs:
           distribution: 'temurin' # Distribuição estável e amplamente usada
           java-version: '21'
 
-      # 3️⃣ Instala Maven 3.10+ (compatível com Java 21)
-      # O Maven pré-instalado no runner pode estar desatualizado, então baixamos a versão recente
-      - name: "[3] Instalar Maven 3.10+"
+      # 3️⃣ Instalar Maven 3.9.9 (compatível com Java 21)
+      - name: "[3] Instalar Maven 3.9.9"
         run: |
           MAVEN_VERSION=3.9.9
           wget https://dlcdn.apache.org/maven/maven-3/${MAVEN_VERSION%.*}/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
