@@ -15,9 +15,9 @@ jobs:
       - name: "[2] Configurar JDK 21"
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
-          cache: 'maven'
+          cache: maven
 
       - name: "[3] Build Projeto Raiz"
         run: |
@@ -59,8 +59,6 @@ jobs:
       - name: "[4] Criar e Executar Docker Compose"
         run: |
           echo "🐳 Configurando ambiente Docker..."
-          
-          # Criar docker-compose simplificado
           cat > docker-compose-ci.yml << 'EOF'
 version: '3.8'
 
@@ -142,29 +140,21 @@ networks:
     driver: bridge
   EOF
   
-  # Iniciar infraestrutura
   echo "🚀 Iniciando infraestrutura..."
   docker compose -f docker-compose-ci.yml up -d postgres zookeeper kafka-broker
   sleep 30
   
-  # Verificar infraestrutura
   echo "🔍 Verificando infraestrutura..."
   docker compose -f docker-compose-ci.yml ps
   
-  # Iniciar serviços
   echo "🚀 Iniciando serviços..."
   docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
   sleep 45
   
-  # Verificar serviços
   echo "🔍 Verificando serviços..."
   docker compose -f docker-compose-ci.yml ps
   
-  # Testar health checks
   echo "🏥 Testando health checks..."
-  
-  # Testar Conta Service
-  echo "🔍 Testando Conta Service..."
   if curl -s -f http://localhost:8081/health; then
 echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
   else
@@ -173,8 +163,6 @@ echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU"
   exit 1
   fi
   
-  # Testar Kafka Service
-  echo "🔍 Testando Kafka Service..."
   if curl -s -f http://localhost:8082/health; then
 echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
   else
