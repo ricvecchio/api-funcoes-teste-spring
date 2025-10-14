@@ -2,7 +2,9 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Criar usuário não-root para segurança
+# Instalar curl para health checks
+USER root
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r spring && useradd -r -g spring spring
 USER spring:spring
 
@@ -12,9 +14,14 @@ COPY target/conta-service-*.jar app.jar
 # Expor porta
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/api/actuator/health || exit 1
+# Health check melhorado
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
 
-# Entrada da aplicação com profile docker
-ENTRYPOINT ["java", "-jar", "-Dspring.profiles.active=docker", "app.jar"]
+# Entrada da aplicação com melhor configuração de memória
+ENTRYPOINT ["java", "-jar", \
+            "-Dspring.profiles.active=docker", \
+            "-Djava.security.egd=file:/dev/./urandom", \
+            "-XX:+UseContainerSupport", \
+            "-XX:MaxRAMPercentage=75.0", \
+            "app.jar"]
