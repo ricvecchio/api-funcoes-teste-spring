@@ -36,10 +36,10 @@ services:
     networks:
       - microservices-net
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD-SHELL", "echo ruok | nc -w 5 127.0.0.1 2181 | grep imok"]
       interval: 10s
-      timeout: 5s
-      retries: 10
+      timeout: 10s
+      retries: 20
 
   kafka-broker:
     image: confluentinc/cp-kafka:7.5.0
