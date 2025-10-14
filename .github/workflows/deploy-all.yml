@@ -135,7 +135,7 @@ jobs:
           networks:
               microservices-net:
                 driver: bridge
-        DOCKERCOMPOSE
+          DOCKERCOMPOSE
 
       - name: Executar Docker Compose
         run: |
@@ -216,9 +216,9 @@ jobs:
           path: '.'
           format: 'HTML'
           args: |
-              --failOnCVSS 7
-              --scan conta-service/
-              --scan kafka-service/
+            --failOnCVSS 7
+            --scan conta-service/
+            --scan kafka-service/
 
       - name: Upload Report
         uses: actions/upload-artifact@v4
