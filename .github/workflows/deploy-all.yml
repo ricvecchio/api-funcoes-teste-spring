@@ -185,57 +185,65 @@ jobs:
           docker compose -f docker-compose-ci.yml up -d postgres zookeeper
           
           echo "⏳ Aguardando Zookeeper..."
-          sleep 30
+          sleep 20
+          
+          echo "🔍 Verificando Zookeeper..."
+          until docker exec zookeeper echo "ruok" | nc localhost 2181 | grep -q "imok"; do
+            echo "⏳ Zookeeper não está pronto..."
+            sleep 5
+          done
+          echo "✅ Zookeeper pronto!"
           
           docker compose -f docker-compose-ci.yml up -d kafka-broker
           
-          echo "⏳ Aguardando infraestrutura ficar pronta..."
-          sleep 90
+          echo "⏳ Aguardando Kafka Broker..."
+          until docker exec kafka-broker kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do
+            echo "⏳ Kafka Broker não está pronto..."
+            sleep 10
+          done
+          echo "✅ Kafka Broker pronto!"
 
           echo "🔍 Verificando saúde da infraestrutura..."
           echo "=== Status dos containers ==="
           docker compose -f docker-compose-ci.yml ps
           
-          echo "=== Logs PostgreSQL ==="
-          docker compose -f docker-compose-ci.yml logs postgres --tail=50
-          echo "=== Logs Zookeeper ==="
-          docker compose -f docker-compose-ci.yml logs zookeeper --tail=20
-          echo "=== Logs Kafka ==="
-          docker compose -f docker-compose-ci.yml logs kafka-broker --tail=50
-
-          echo "🔍 Testando conectividade com Kafka..."
-          docker exec kafka-broker kafka-topics --bootstrap-server localhost:9092 --list || echo "Kafka ainda não está pronto"
+          echo "=== Testando conexão com PostgreSQL ==="
+          docker exec postgres-db pg_isready -U postgres -d conta_db
+          
+          echo "=== Testando conexão com Kafka ==="
+          docker exec kafka-broker kafka-topics --bootstrap-server localhost:9092 --list || echo "Kafka responde mas sem tópicos"
 
           echo "🚀 Iniciando serviços de aplicação..."
           docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
           
-          echo "⏳ Aguardando serviços ficarem prontos (180 segundos)..."
-          sleep 180
+          echo "⏳ Aguardando serviços ficarem prontos (120 segundos)..."
+          sleep 120
 
           echo "🔍 Verificando estado dos serviços..."
+          echo "=== Status dos containers ==="
           docker compose -f docker-compose-ci.yml ps
-          echo "=== Logs Conta Service ==="
-          docker compose -f docker-compose-ci.yml logs conta-service --tail=100
-          echo "=== Logs Kafka Service ==="
-          docker compose -f docker-compose-ci.yml logs kafka-service --tail=100
+          
+          echo "=== Logs Conta Service (últimas 30 linhas) ==="
+          docker compose -f docker-compose-ci.yml logs conta-service --tail=30
+          echo "=== Logs Kafka Service (últimas 30 linhas) ==="
+          docker compose -f docker-compose-ci.yml logs kafka-service --tail=30
 
           echo "🏥 Executando health checks..."
 
           echo "🔍 Testando Conta Service..."
-          max_retries=25
+          max_retries=20
           retry_count=0
           while [ $retry_count -lt $max_retries ]; do
             if curl -s -f http://localhost:8081/actuator/health > /dev/null 2>&1; then
               echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
-              echo "Status completo:"
-              curl -s http://localhost:8081/actuator/health | jq . || echo "JSON parse falhou, mas health check passou"
+              echo "Status:"
+              curl -s http://localhost:8081/actuator/health | head -c 200
+              echo ""
               break
             else
               echo "⏳ Conta Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
-              sleep 15
+              sleep 10
               retry_count=$((retry_count + 1))
-              # Logar estado atual do serviço
-              docker compose -f docker-compose-ci.yml logs conta-service --tail=5 || true
             fi
           done
 
@@ -243,10 +251,6 @@ jobs:
             echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
             echo "=== Últimos logs do Conta Service ==="
             docker compose -f docker-compose-ci.yml logs conta-service --tail=50
-            echo "=== Logs do PostgreSQL ==="
-            docker compose -f docker-compose-ci.yml logs postgres --tail=20
-            echo "=== Logs do Kafka ==="
-            docker compose -f docker-compose-ci.yml logs kafka-broker --tail=20
             exit 1
           fi
 
@@ -255,15 +259,14 @@ jobs:
           while [ $retry_count -lt $max_retries ]; do
             if curl -s -f http://localhost:8082/actuator/health > /dev/null 2>&1; then
               echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
-              echo "Status completo:"
-              curl -s http://localhost:8082/actuator/health | jq . || echo "JSON parse falhou, mas health check passou"
+              echo "Status:"
+              curl -s http://localhost:8082/actuator/health | head -c 200
+              echo ""
               break
             else
               echo "⏳ Kafka Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
-              sleep 15
+              sleep 10
               retry_count=$((retry_count + 1))
-              # Logar estado atual do serviço
-              docker compose -f docker-compose-ci.yml logs kafka-service --tail=5 || true
             fi
           done
 
@@ -271,10 +274,6 @@ jobs:
             echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
             echo "=== Últimos logs do Kafka Service ==="
             docker compose -f docker-compose-ci.yml logs kafka-service --tail=50
-            echo "=== Logs do PostgreSQL ==="
-            docker compose -f docker-compose-ci.yml logs postgres --tail=20
-            echo "=== Logs do Kafka Broker ==="
-            docker compose -f docker-compose-ci.yml logs kafka-broker --tail=20
             exit 1
           fi
 

@@ -17,17 +17,13 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres -d conta_db"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 15
       start_period: 10s
     command: >
       postgres
-      -c max_connections=100
+      -c max_connections=200
       -c shared_buffers=256MB
       -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -35,7 +31,6 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
     ports:
       - "2181:2181"
     networks:
@@ -60,7 +55,6 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_LOG_RETENTION_HOURS: 24
       KAFKA_MESSAGE_MAX_BYTES: 10485760
-      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     ports:
       - "9092:9092"
@@ -70,11 +64,11 @@ services:
       zookeeper:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka-broker:9092 --list --command-config /tmp/client.properties || exit 1"]
-      interval: 20s
-      timeout: 15s
-      retries: 15
-      start_period: 60s
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 45s
 
   conta-service:
     image: conta-service:latest
@@ -82,26 +76,23 @@ services:
     ports:
       - "8081:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      # OVERRIDES para Docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
-      SPRING_JPA_SHOW_SQL: "false"
-      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_LOB_NON_CONTEXTUAL_CREATION: "true"
+      # Configurações específicas para ambiente Docker
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 5
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+      SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT: 5000
       SPRING_KAFKA_PROPERTIES_REQUEST_TIMEOUT_MS: 60000
-      SPRING_KAFKA_PROPERTIES_RETRY_BACKOFF_MS: 1000
+      SPRING_KAFKA_PROPERTIES_RETRY_BACKOFF_MS: 2000
       SPRING_KAFKA_PROPERTIES_MAX_BLOCK_MS: 60000
-      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
-      MANAGEMENT_HEALTH_PROBES_ENABLED: "true"
-      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: INFO
+      # Logging para debug
       LOGGING_LEVEL_COM_FUNCOES: DEBUG
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: INFO
       LOGGING_LEVEL_ORG_HIBERNATE: WARN
+      # Java optimizations
+      JAVA_OPTS: "-Xmx512m -Xms256m -Djava.security.egd=file:/dev/./urandom"
     networks:
       - microservices-net
     depends_on:
@@ -111,10 +102,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 120s
+      interval: 20s
+      timeout: 15s
+      retries: 12
+      start_period: 90s
 
   kafka-service:
     image: kafka-service:latest
@@ -122,29 +113,24 @@ services:
     ports:
       - "8082:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      # OVERRIDES para Docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
-      SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
-      SPRING_JPA_SHOW_SQL: "false"
+      # Configurações específicas para ambiente Docker
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 5
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+      SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT: 5000
       SPRING_KAFKA_CONSUMER_PROPERTIES_SESSION_TIMEOUT_MS: 45000
       SPRING_KAFKA_CONSUMER_PROPERTIES_HEARTBEAT_INTERVAL_MS: 15000
       SPRING_KAFKA_CONSUMER_PROPERTIES_MAX_POLL_INTERVAL_MS: 300000
-      SPRING_KAFKA_LISTENER_ACK_MODE: manual
-      SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
-      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
-      MANAGEMENT_HEALTH_PROBES_ENABLED: "true"
-      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: INFO
+      SPRING_KAFKA_CONSUMER_PROPERTIES_REQUEST_TIMEOUT_MS: 60000
+      # Logging para debug
       LOGGING_LEVEL_COM_FUNCOES: DEBUG
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: INFO
       LOGGING_LEVEL_ORG_HIBERNATE: WARN
+      # Java optimizations
+      JAVA_OPTS: "-Xmx512m -Xms256m -Djava.security.egd=file:/dev/./urandom"
     networks:
       - microservices-net
     depends_on:
@@ -154,10 +140,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 120s
+      interval: 20s
+      timeout: 15s
+      retries: 12
+      start_period: 90s
 
 networks:
   microservices-net:
