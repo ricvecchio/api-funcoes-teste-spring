@@ -2,35 +2,29 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
-
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Projeto raiz que agrega todos os microserviços -->
     <groupId>com.funcoes</groupId>
     <artifactId>api-funcoes-teste-spring</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
-    <name>API Funções - Projeto Raiz</name>
-    <description>Projeto pai que agrega os microserviços Conta e Kafka</description>
+    <name>API Funcoes Teste Spring</name>
+    <description>Microserviços para teste de funções</description>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-boot.version>3.2.0</spring-boot.version>
+    </properties>
 
     <modules>
         <module>conta-service</module>
         <module>kafka-service</module>
     </modules>
 
-    <properties>
-        <!-- Define versão do Java para todos os módulos -->
-        <java.version>21</java.version>
-        <spring-boot.version>3.3.2</spring-boot.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
-    </properties>
-
-    <!-- Dependency Management para controle centralizado de versões -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -46,34 +40,28 @@
     <build>
         <pluginManagement>
             <plugins>
-                <!-- Plugin Maven Compiler -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>${maven.compiler.plugin.version}</version>
-                    <configuration>
-                        <source>${java.version}</source>
-                        <target>${java.version}</target>
-                        <encoding>${project.build.sourceEncoding}</encoding>
-                    </configuration>
-                </plugin>
-
-                <!-- Plugin Spring Boot -->
                 <plugin>
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
                     <configuration>
-                        <excludes>
-                            <exclude>
+                        <source>21</source>
+                        <target>21</target>
+                        <annotationProcessorPaths>
+                            <path>
                                 <groupId>org.projectlombok</groupId>
                                 <artifactId>lombok</artifactId>
-                            </exclude>
-                        </excludes>
+                                <version>1.18.30</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
     </build>
-
 </project>

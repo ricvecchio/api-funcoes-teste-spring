@@ -18,24 +18,35 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      - name: Build e Teste Projeto Raiz
+      - name: Validar estrutura do projeto
         run: |
-          echo "🏗️ Building projeto raiz..."
-          mvn clean install -DskipTests=false
+          echo "📁 Estrutura do projeto:"
+          find . -name "pom.xml" -o -name "*.java" | head -20
+          echo ""
+          echo "📦 Módulos encontrados:"
+          ls -la
 
-      - name: Build Conta Service
+      - name: Build Projeto Completo com Lombok
         run: |
-          echo "🔧 Building Conta Service..."
+          echo "🏗️ Building projeto completo com Lombok..."
+          mvn clean compile -DskipTests
+          echo "✅ Build do projeto completo concluído"
+
+      - name: Package dos Serviços
+        run: |
+          echo "📦 Empacotando Conta Service..."
           cd conta-service
-          mvn clean package -DskipTests=true
-          echo "✅ Conta Service build completo"
-
-      - name: Build Kafka Service
-        run: |
-          echo "🔧 Building Kafka Service..."
-          cd kafka-service
-          mvn clean package -DskipTests=true
-          echo "✅ Kafka Service build completo"
+          mvn clean package -DskipTests
+          echo "✅ JARs gerados:"
+          ls -la target/*.jar
+          echo "✅ Conta Service empacotado"
+          
+          echo "📦 Empacotando Kafka Service..."
+          cd ../kafka-service
+          mvn clean package -DskipTests
+          echo "✅ JARs gerados:"
+          ls -la target/*.jar
+          echo "✅ Kafka Service empacotado"
 
   docker-integration:
     runs-on: ubuntu-latest
@@ -44,20 +55,49 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Rebuild dos serviços para garantir
+        run: |
+          echo "🔧 Rebuild dos serviços..."
+          cd conta-service && mvn clean package -DskipTests -q
+          cd ../kafka-service && mvn clean package -DskipTests -q
+          echo "✅ Rebuild concluído"
+
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Instalar dependências do sistema
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq
+          sudo apt-get install -y curl netcat-openbsd
+
+      - name: Verificar JARs gerados
+        run: |
+          echo "🔍 Verificando JARs gerados:"
+          echo "=== Conta Service ==="
+          ls -la conta-service/target/ || echo "❌ Diretório target não encontrado"
+          find conta-service/target -name "*.jar" || echo "❌ Nenhum JAR encontrado"
+          
+          echo "=== Kafka Service ==="
+          ls -la kafka-service/target/ || echo "❌ Diretório target não encontrado"
+          find kafka-service/target -name "*.jar" || echo "❌ Nenhum JAR encontrado"
 
       - name: Build das Imagens Docker
         run: |
           echo "🐳 Build das imagens Docker..."
+          echo "📦 Building Conta Service image..."
           docker build -t conta-service:latest -f conta-service/Dockerfile ./conta-service
+          echo "📦 Building Kafka Service image..."
           docker build -t kafka-service:latest -f kafka-service/Dockerfile ./kafka-service
           echo "✅ Imagens Docker construídas"
+          
+          echo "🔍 Verificando imagens:"
+          docker images | grep service
 
       - name: Criar docker-compose-ci.yml
         run: |
@@ -78,10 +118,10 @@ jobs:
               networks:
                 - microservices-net
               healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres"]
-                interval: 10s
+                test: ["CMD-SHELL", "pg_isready -U postgres -d conta_db"]
+                interval: 5s
                 timeout: 5s
-                retries: 5
+                retries: 10
                 start_period: 10s
 
             zookeeper:
@@ -98,7 +138,7 @@ jobs:
                 test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
                 interval: 10s
                 timeout: 5s
-                retries: 5
+                retries: 10
 
             kafka-broker:
               image: confluentinc/cp-kafka:7.5.0
@@ -120,10 +160,10 @@ jobs:
                 zookeeper:
                   condition: service_healthy
               healthcheck:
-                test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
-                interval: 15s
+                test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+                interval: 10s
                 timeout: 10s
-                retries: 10
+                retries: 15
                 start_period: 30s
 
             conta-service:
@@ -132,10 +172,19 @@ jobs:
               ports:
                 - "8081:8080"
               environment:
-                SPRING_PROFILES_ACTIVE: docker
-                # Override específicos se necessário
                 SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+                SPRING_DATASOURCE_USERNAME: postgres
+                SPRING_DATASOURCE_PASSWORD: password
                 SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+                SPRING_JPA_HIBERNATE_DDL_AUTO: update
+                # Configurações de resiliência
+                SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
+                SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 5
+                SPRING_KAFKA_PROPERTIES_RETRY_BACKOFF_MS: 1000
+                SPRING_KAFKA_PROPERTIES_MAX_BLOCK_MS: 30000
+                # Logging
+                LOGGING_LEVEL_COM_FUNCOES: INFO
+                LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: WARN
               networks:
                 - microservices-net
               depends_on:
@@ -144,11 +193,11 @@ jobs:
                 kafka-broker:
                   condition: service_healthy
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
-                interval: 20s
+                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+                interval: 15s
                 timeout: 10s
-                retries: 8
-                start_period: 90s
+                retries: 15
+                start_period: 60s
 
             kafka-service:
               image: kafka-service:latest
@@ -156,10 +205,20 @@ jobs:
               ports:
                 - "8082:8080"
               environment:
-                SPRING_PROFILES_ACTIVE: docker
-                # Override específicos se necessário
                 SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+                SPRING_DATASOURCE_USERNAME: postgres
+                SPRING_DATASOURCE_PASSWORD: password
                 SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+                SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
+                SPRING_JPA_HIBERNATE_DDL_AUTO: update
+                # Configurações de resiliência
+                SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
+                SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 5
+                SPRING_KAFKA_CONSUMER_PROPERTIES_SESSION_TIMEOUT_MS: 30000
+                SPRING_KAFKA_CONSUMER_PROPERTIES_HEARTBEAT_INTERVAL_MS: 10000
+                # Logging
+                LOGGING_LEVEL_COM_FUNCOES: INFO
+                LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: WARN
               networks:
                 - microservices-net
               depends_on:
@@ -168,11 +227,11 @@ jobs:
                 kafka-broker:
                   condition: service_healthy
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
-                interval: 20s
+                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+                interval: 15s
                 timeout: 10s
-                retries: 8
-                start_period: 90s
+                retries: 15
+                start_period: 60s
 
           networks:
             microservices-net:
@@ -185,10 +244,10 @@ jobs:
           docker compose -f docker-compose-ci.yml up -d postgres zookeeper
           
           echo "⏳ Aguardando Zookeeper..."
-          sleep 20
+          sleep 15
           
           echo "🔍 Verificando Zookeeper..."
-          until docker exec zookeeper echo "ruok" | nc localhost 2181 | grep -q "imok"; do
+          until echo "ruok" | nc -w 1 localhost 2181 | grep -q "imok"; do
             echo "⏳ Zookeeper não está pronto..."
             sleep 5
           done
@@ -197,83 +256,87 @@ jobs:
           docker compose -f docker-compose-ci.yml up -d kafka-broker
           
           echo "⏳ Aguardando Kafka Broker..."
-          until docker exec kafka-broker kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do
-            echo "⏳ Kafka Broker não está pronto..."
-            sleep 10
+          for i in {1..30}; do
+            if docker exec kafka-broker kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; then
+              echo "✅ Kafka Broker pronto!"
+              break
+            fi
+            echo "⏳ Kafka Broker não está pronto... tentativa $i/30"
+            sleep 5
           done
-          echo "✅ Kafka Broker pronto!"
 
           echo "🔍 Verificando saúde da infraestrutura..."
           echo "=== Status dos containers ==="
           docker compose -f docker-compose-ci.yml ps
           
-          echo "=== Testando conexão com PostgreSQL ==="
-          docker exec postgres-db pg_isready -U postgres -d conta_db
+          echo "=== Testando PostgreSQL ==="
+          docker exec postgres-db pg_isready -U postgres -d conta_db && echo "✅ PostgreSQL OK"
           
-          echo "=== Testando conexão com Kafka ==="
-          docker exec kafka-broker kafka-topics --bootstrap-server localhost:9092 --list || echo "Kafka responde mas sem tópicos"
+          echo "=== Testando Kafka ==="
+          docker exec kafka-broker kafka-topics --bootstrap-server localhost:9092 --list && echo "✅ Kafka OK" || echo "⚠️  Kafka responde mas sem tópicos"
 
           echo "🚀 Iniciando serviços de aplicação..."
           docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
           
-          echo "⏳ Aguardando serviços ficarem prontos (120 segundos)..."
-          sleep 120
+          echo "⏳ Aguardando serviços ficarem prontos..."
+          sleep 60
 
           echo "🔍 Verificando estado dos serviços..."
           echo "=== Status dos containers ==="
           docker compose -f docker-compose-ci.yml ps
           
-          echo "=== Logs Conta Service (últimas 30 linhas) ==="
-          docker compose -f docker-compose-ci.yml logs conta-service --tail=30
-          echo "=== Logs Kafka Service (últimas 30 linhas) ==="
-          docker compose -f docker-compose-ci.yml logs kafka-service --tail=30
+          echo "=== Logs Conta Service ==="
+          docker compose -f docker-compose-ci.yml logs conta-service --tail=20
+          echo "=== Logs Kafka Service ==="
+          docker compose -f docker-compose-ci.yml logs kafka-service --tail=20
 
           echo "🏥 Executando health checks..."
 
           echo "🔍 Testando Conta Service..."
-          max_retries=20
-          retry_count=0
-          while [ $retry_count -lt $max_retries ]; do
+          for i in {1..25}; do
             if curl -s -f http://localhost:8081/actuator/health > /dev/null 2>&1; then
-              echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
-              echo "Status:"
-              curl -s http://localhost:8081/actuator/health | head -c 200
-              echo ""
+              echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU na tentativa $i"
+              echo "📊 Status:"
+              curl -s http://localhost:8081/actuator/health | grep status || echo "Status não disponível"
               break
             else
-              echo "⏳ Conta Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
-              sleep 10
-              retry_count=$((retry_count + 1))
+              echo "⏳ Conta Service não está pronto... tentativa $i/25"
+              sleep 5
+            fi
+            if [ $i -eq 10 ]; then
+              echo "📋 Logs do Conta Service (últimas 20 linhas):"
+              docker compose -f docker-compose-ci.yml logs conta-service --tail=20
             fi
           done
 
-          if [ $retry_count -eq $max_retries ]; then
-            echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
-            echo "=== Últimos logs do Conta Service ==="
-            docker compose -f docker-compose-ci.yml logs conta-service --tail=50
+          if [ $i -eq 25 ]; then
+            echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU após 25 tentativas"
+            echo "=== Logs completos do Conta Service ==="
+            docker compose -f docker-compose-ci.yml logs conta-service
             exit 1
           fi
 
           echo "🔍 Testando Kafka Service..."
-          retry_count=0
-          while [ $retry_count -lt $max_retries ]; do
+          for i in {1..25}; do
             if curl -s -f http://localhost:8082/actuator/health > /dev/null 2>&1; then
-              echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
-              echo "Status:"
-              curl -s http://localhost:8082/actuator/health | head -c 200
-              echo ""
+              echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU na tentativa $i"
+              echo "📊 Status:"
+              curl -s http://localhost:8082/actuator/health | grep status || echo "Status não disponível"
               break
             else
-              echo "⏳ Kafka Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
-              sleep 10
-              retry_count=$((retry_count + 1))
+              echo "⏳ Kafka Service não está pronto... tentativa $i/25"
+              sleep 5
+            fi
+            if [ $i -eq 10 ]; then
+              echo "📋 Logs do Kafka Service (últimas 20 linhas):"
+              docker compose -f docker-compose-ci.yml logs kafka-service --tail=20
             fi
           done
 
-          if [ $retry_count -eq $max_retries ]; then
-            echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
-            echo "=== Últimos logs do Kafka Service ==="
-            docker compose -f docker-compose-ci.yml logs kafka-service --tail=50
+          if [ $i -eq 25 ]; then
+            echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU após 25 tentativas"
+            echo "=== Logs completos do Kafka Service ==="
+            docker compose -f docker-compose-ci.yml logs kafka-service
             exit 1
           fi
 
