@@ -8,20 +8,33 @@ services:
       POSTGRES_DB: conta_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
       - "5432:5432"
     networks:
       - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
     networks:
       - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka-broker:
     image: confluentinc/cp-kafka:7.5.0
@@ -29,20 +42,28 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     ports:
       - "9092:9092"
     networks:
       - microservices-net
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   conta-service:
     image: conta-service:latest
-    build:
-      context: ..
-      dockerfile: conta-service/Dockerfile
     container_name: conta-service
     ports:
       - "8081:8080"
@@ -51,20 +72,27 @@ services:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      # Configurações para evitar timeout
-      SPRING_KAFKA_PROPERTIES_REQUEST_TIMEOUT_MS: 30000
-      SPRING_KAFKA_PROPERTIES_SESSION_TIMEOUT_MS: 30000
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_LIQUIBASE_ENABLED: false
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      MANAGEMENT_HEALTH_PROBES_ENABLED: true
+      SPRING_PROFILES_ACTIVE: docker
     networks:
       - microservices-net
     depends_on:
-      - postgres
-      - kafka-broker
+      postgres:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   kafka-service:
     image: kafka-service:latest
-    build:
-      context: ..
-      dockerfile: kafka-service/Dockerfile
     container_name: kafka-service
     ports:
       - "8082:8080"
@@ -74,15 +102,24 @@ services:
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
-      # Configurações para evitar timeout
-      SPRING_KAFKA_CONSUMER_PROPERTIES_REQUEST_TIMEOUT_MS: 45000
-      SPRING_KAFKA_CONSUMER_PROPERTIES_SESSION_TIMEOUT_MS: 30000
-      SPRING_KAFKA_PROPERTIES_MAX_POLL_INTERVAL_MS: 300000
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_LIQUIBASE_ENABLED: false
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      MANAGEMENT_HEALTH_PROBES_ENABLED: true
+      SPRING_PROFILES_ACTIVE: docker
     networks:
       - microservices-net
     depends_on:
-      - postgres
-      - kafka-broker
+      postgres:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
 networks:
   microservices-net:

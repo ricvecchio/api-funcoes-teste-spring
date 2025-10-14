@@ -1,25 +1,20 @@
-# Build stage
-FROM maven:3.9.8-eclipse-temurin-21 AS build
-
-WORKDIR /workspace
-
-# Copiar projeto completo para resolver dependências
-COPY .. .
-
-# Build do projeto raiz primeiro
-RUN mvn -f /workspace/pom.xml clean install -DskipTests -q
-
-# Build do microserviço
-RUN mvn -f /workspace/conta-service/pom.xml clean package -DskipTests -q
-
-# Runtime stage
-FROM eclipse-temurin:21-jre-slim
+FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Copiar JAR
-COPY --from=build /workspace/conta-service/target/*.jar app.jar
+# Criar usuário não-root para segurança
+RUN groupadd -r spring && useradd -r -g spring spring
+USER spring:spring
 
+# Copiar JAR da aplicação
+COPY target/conta-service-*.jar app.jar
+
+# Expor porta
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/api/actuator/health || exit 1
+
+# Entrada da aplicação com profile docker
+ENTRYPOINT ["java", "-jar", "-Dspring.profiles.active=docker", "app.jar"]

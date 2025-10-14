@@ -18,24 +18,24 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      - name: Build Projeto Raiz
+      - name: Build e Teste Projeto Raiz
         run: |
           echo "🏗️ Building projeto raiz..."
-          mvn clean install -DskipTests -q
+          mvn clean install -DskipTests=false
 
       - name: Build Conta Service
         run: |
           echo "🔧 Building Conta Service..."
           cd conta-service
-          mvn clean compile -DskipTests -q
-          echo "✅ Conta Service compilado"
+          mvn clean package -DskipTests=true
+          echo "✅ Conta Service build completo"
 
       - name: Build Kafka Service
         run: |
           echo "🔧 Building Kafka Service..."
           cd kafka-service
-          mvn clean compile -DskipTests -q
-          echo "✅ Kafka Service compilado"
+          mvn clean package -DskipTests=true
+          echo "✅ Kafka Service build completo"
 
   docker-integration:
     runs-on: ubuntu-latest
@@ -47,120 +47,176 @@ jobs:
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Instalar dependências do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
       - name: Build das Imagens Docker
         run: |
           echo "🐳 Build das imagens Docker..."
-          docker build -t conta-service:latest -f conta-service/Dockerfile .
-          docker build -t kafka-service:latest -f kafka-service/Dockerfile .
+          docker build -t conta-service:latest -f conta-service/Dockerfile ./conta-service
+          docker build -t kafka-service:latest -f kafka-service/Dockerfile ./kafka-service
           echo "✅ Imagens Docker construídas"
 
-      - name: Criar docker-compose.yml
+      - name: Criar docker-compose-ci.yml
         run: |
           cat > docker-compose-ci.yml << 'DOCKERCOMPOSE'
           version: '3.8'
 
           services:
-              postgres:
-                image: postgres:15-alpine
-                container_name: postgres-db
-                environment:
-                    POSTGRES_DB: conta_db
-                    POSTGRES_USER: postgres
-                    POSTGRES_PASSWORD: password
-                ports:
-                    - "5432:5432"
-                networks:
-                    - microservices-net
-          
-              zookeeper:
-                image: confluentinc/cp-zookeeper:7.5.0
-                container_name: zookeeper
-                environment:
-                  ZOOKEEPER_CLIENT_PORT: 2181
-                ports:
-                  - "2181:2181"
-                networks:
-                  - microservices-net
+            postgres:
+              image: postgres:15-alpine
+              container_name: postgres-db
+              environment:
+                POSTGRES_DB: conta_db
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: password
+                POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+              ports:
+                - "5432:5432"
+              networks:
+                - microservices-net
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+                start_period: 10s
 
-              kafka-broker:
-                image: confluentinc/cp-kafka:7.5.0
-                container_name: kafka-broker
-                environment:
-                    KAFKA_BROKER_ID: 1
-                    KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-                    KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
-                    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-                ports:
-                    - "9092:9092"
-                networks:
-                    - microservices-net
-                depends_on:
-                    - zookeeper
+            zookeeper:
+              image: confluentinc/cp-zookeeper:7.5.0
+              container_name: zookeeper
+              environment:
+                ZOOKEEPER_CLIENT_PORT: 2181
+                ZOOKEEPER_TICK_TIME: 2000
+              ports:
+                - "2181:2181"
+              networks:
+                - microservices-net
+              healthcheck:
+                test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
 
-              conta-service:
-                  image: conta-service:latest
-                  container_name: conta-service
-                  ports:
-                      - "8081:8080"
-                  environment:
-                      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-                      SPRING_DATASOURCE_USERNAME: postgres
-                      SPRING_DATASOURCE_PASSWORD: password
-                      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-                      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-                  networks:
-                      - microservices-net
-                  depends_on:
-                      - postgres
-                      - kafka-broker
+            kafka-broker:
+              image: confluentinc/cp-kafka:7.5.0
+              container_name: kafka-broker
+              environment:
+                KAFKA_BROKER_ID: 1
+                KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+                KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092,PLAINTEXT_HOST://localhost:9092
+                KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+                KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+                KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+                KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+                KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+              ports:
+                - "9092:9092"
+              networks:
+                - microservices-net
+              depends_on:
+                zookeeper:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+                interval: 15s
+                timeout: 10s
+                retries: 10
+                start_period: 30s
 
-              kafka-service:
-                  image: kafka-service:latest
-                  container_name: kafka-service
-                  ports:
-                      - "8082:8080"
-                  environment:
-                      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-                      SPRING_DATASOURCE_USERNAME: postgres
-                      SPRING_DATASOURCE_PASSWORD: password
-                      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-                      SPRING_KAFKA_CONSUMER_GROUP_ID: kafka-service-group
-                      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-                  networks:
-                      - microservices-net
-                  depends_on:
-                      - postgres
-                      - kafka-broker
+            conta-service:
+              image: conta-service:latest
+              container_name: conta-service
+              ports:
+                - "8081:8080"
+              environment:
+                SPRING_PROFILES_ACTIVE: docker
+                # Override específicos se necessário
+                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+                SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+              networks:
+                - microservices-net
+              depends_on:
+                postgres:
+                  condition: service_healthy
+                kafka-broker:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
+                interval: 20s
+                timeout: 10s
+                retries: 8
+                start_period: 90s
+
+            kafka-service:
+              image: kafka-service:latest
+              container_name: kafka-service
+              ports:
+                - "8082:8080"
+              environment:
+                SPRING_PROFILES_ACTIVE: docker
+                # Override específicos se necessário
+                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
+                SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+              networks:
+                - microservices-net
+              depends_on:
+                postgres:
+                  condition: service_healthy
+                kafka-broker:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
+                interval: 20s
+                timeout: 10s
+                retries: 8
+                start_period: 90s
 
           networks:
-              microservices-net:
-                driver: bridge
+            microservices-net:
+              driver: bridge
           DOCKERCOMPOSE
 
       - name: Executar Docker Compose
         run: |
           echo "🚀 Iniciando infraestrutura..."
           docker compose -f docker-compose-ci.yml up -d postgres zookeeper kafka-broker
-          sleep 30
+          
+          echo "⏳ Aguardando infraestrutura ficar pronta..."
+          sleep 60
 
-          echo "🔍 Verificando infraestrutura..."
+          echo "🔍 Verificando saúde da infraestrutura..."
           docker compose -f docker-compose-ci.yml ps
-    
-          echo "🚀 Iniciando serviços..."
+          echo "=== Logs PostgreSQL ==="
+          docker compose -f docker-compose-ci.yml logs postgres --tail=20
+          echo "=== Logs Kafka ==="
+          docker compose -f docker-compose-ci.yml logs kafka-broker --tail=20
+
+          echo "🚀 Iniciando serviços de aplicação..."
           docker compose -f docker-compose-ci.yml up -d conta-service kafka-service
-          sleep 45
-    
-          echo "🔍 Verificando serviços..."
+          
+          echo "⏳ Aguardando serviços ficarem prontos..."
+          sleep 90
+
+          echo "🔍 Verificando estado dos serviços..."
           docker compose -f docker-compose-ci.yml ps
-    
-          echo "🏥 Testando health checks..."
-    
+          echo "=== Logs Conta Service ==="
+          docker compose -f docker-compose-ci.yml logs conta-service --tail=30
+          echo "=== Logs Kafka Service ==="
+          docker compose -f docker-compose-ci.yml logs kafka-service --tail=30
+
+          echo "🏥 Executando health checks..."
+
           echo "🔍 Testando Conta Service..."
-          max_retries=10
+          max_retries=20
           retry_count=0
           while [ $retry_count -lt $max_retries ]; do
-            if curl -s -f http://localhost:8081/actuator/health; then
+            if curl -s -f http://localhost:8081/api/actuator/health > /dev/null 2>&1; then
               echo "✅ CONTA SERVICE: HEALTH CHECK PASSOU"
+              echo "Status completo:"
+              curl -s http://localhost:8081/api/actuator/health | jq .
               break
             else
               echo "⏳ Conta Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
@@ -168,18 +224,20 @@ jobs:
               retry_count=$((retry_count + 1))
             fi
           done
-  
+
           if [ $retry_count -eq $max_retries ]; then
             echo "❌ CONTA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
             docker compose -f docker-compose-ci.yml logs conta-service
             exit 1
           fi
-  
+
           echo "🔍 Testando Kafka Service..."
           retry_count=0
           while [ $retry_count -lt $max_retries ]; do
-            if curl -s -f http://localhost:8082/actuator/health; then
+            if curl -s -f http://localhost:8082/api/actuator/health > /dev/null 2>&1; then
               echo "✅ KAFKA SERVICE: HEALTH CHECK PASSOU"
+              echo "Status completo:"
+              curl -s http://localhost:8082/api/actuator/health | jq .
               break
             else
               echo "⏳ Kafka Service não está pronto... tentativa $((retry_count + 1))/$max_retries"
@@ -187,19 +245,20 @@ jobs:
               retry_count=$((retry_count + 1))
             fi
           done
-  
+
           if [ $retry_count -eq $max_retries ]; then
             echo "❌ KAFKA SERVICE: HEALTH CHECK FALHOU após $max_retries tentativas"
             docker compose -f docker-compose-ci.yml logs kafka-service
             exit 1
           fi
-  
-          echo "🎉 TODOS OS TESTES PASSARAM!"
+
+          echo "🎉 TODOS OS TESTES DE INTEGRAÇÃO PASSARAM!"
 
       - name: Limpar Ambiente
         if: always()
         run: |
-          docker compose -f docker-compose-ci.yml down -v
+          docker compose -f docker-compose-ci.yml down -v --remove-orphans
+          docker system prune -f
           echo "🧹 Ambiente limpo"
 
   security-scan:
