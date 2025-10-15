@@ -3,16 +3,16 @@ services:
     image: postgres:15-alpine
     container_name: postgres-db
     environment:
-      POSTGRES_DB: conta_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${DB_NAME:-conta_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-password}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - microservices-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d conta_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-conta_db}"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -27,15 +27,15 @@ services:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
     environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT:-2181}
       ZOOKEEPER_TICK_TIME: 2000
       ZOO_ENABLE_ADMIN: "true"
     ports:
-      - "2181:2181"
+      - "${ZOOKEEPER_PORT:-2181}:2181"
     networks:
       - microservices-net
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 || exit 1"]
+      test: ["CMD-SHELL", "echo ruok | nc localhost ${ZOOKEEPER_PORT:-2181} || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -46,18 +46,13 @@ services:
     container_name: kafka-broker
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT:-2181}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT:-9092},PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_LOG_RETENTION_HOURS: 24
-      KAFKA_MESSAGE_MAX_BYTES: 10485760
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     ports:
-      - "9092:9092"
+      - "${KAFKA_BROKER_PORT:-9092}:9092"
       - "29092:29092"
     networks:
       - microservices-net
@@ -65,31 +60,24 @@ services:
       zookeeper:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:${KAFKA_BROKER_PORT:-9092} > /dev/null 2>&1"]
       interval: 8s
       timeout: 5s
       retries: 10
       start_period: 20s
 
   conta-service:
-    image: conta-service:latest
+    build:
+      context: ${CONTA_SERVICE_PATH:-../conta-service}
+      dockerfile: Dockerfile
     container_name: conta-service
     ports:
-      - "8081:8080"
+      - "${CONTA_SERVICE_PORT:-8081}:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
-      SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT: 5000
-      SPRING_KAFKA_PROPERTIES_REQUEST_TIMEOUT_MS: 60000
-      SPRING_KAFKA_PROPERTIES_RETRY_BACKOFF_MS: 2000
-      SPRING_KAFKA_PROPERTIES_MAX_BLOCK_MS: 60000
-      LOGGING_LEVEL_COM_FUNCOES: DEBUG
-      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: INFO
-      LOGGING_LEVEL_ORG_HIBERNATE: WARN
-      JAVA_OPTS: "-Xmx512m -Xms256m -Djava.security.egd=file:/dev/./urandom"
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/conta_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS:-password}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker:9092}
     networks:
       - microservices-net
     depends_on:
@@ -105,25 +93,17 @@ services:
       start_period: 45s
 
   kafka-service:
-    image: kafka-service:latest
+    build:
+      context: ${KAFKA_SERVICE_PATH:-../kafka-service}
+      dockerfile: Dockerfile
     container_name: kafka-service
     ports:
-      - "8082:8080"
+      - "${KAFKA_SERVICE_PORT:-8082}:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 60000
-      SPRING_DATASOURCE_HIKARI_VALIDATION_TIMEOUT: 5000
-      SPRING_KAFKA_CONSUMER_PROPERTIES_SESSION_TIMEOUT_MS: 45000
-      SPRING_KAFKA_CONSUMER_PROPERTIES_HEARTBEAT_INTERVAL_MS: 15000
-      SPRING_KAFKA_CONSUMER_PROPERTIES_MAX_POLL_INTERVAL_MS: 300000
-      SPRING_KAFKA_CONSUMER_PROPERTIES_REQUEST_TIMEOUT_MS: 60000
-      LOGGING_LEVEL_COM_FUNCOES: DEBUG
-      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: INFO
-      LOGGING_LEVEL_ORG_HIBERNATE: WARN
-      JAVA_OPTS: "-Xmx512m -Xms256m -Djava.security.egd=file:/dev/./urandom"
+      SPRING_DATASOURCE_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/conta_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS:-password}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker:9092}
     networks:
       - microservices-net
     depends_on:
