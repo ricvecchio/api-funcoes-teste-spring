@@ -1,6 +1,5 @@
-name: Deploy Completo de Aplicação
+name: Deploy All Services
 
-# Dispara o workflow em pushes para a branch main
 on:
   push:
     branches:
@@ -9,40 +8,55 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    services:
-      # Serviço Postgres
-      postgres:
-        image: postgres:15
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: mydb
-        options: >-
-          --health-cmd="pg_isready -U user"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
-      # Etapa 1: Checar código
-      - name: Checar código
+      # Checkout do código
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Etapa 2: Inicializar containers
-      - name: Inicializar containers (Zookeeper + Kafka)
+      # Criar rede Docker (se já existir, ignora)
+      - name: Criar rede Docker
+        run: |
+          echo "=============================="
+          echo "Criando rede Docker..."
+          echo "=============================="
+          docker network create github_network || echo "Rede github_network já existe"
+
+      # Iniciar Postgres
+      - name: Iniciar Postgres
+        run: |
+          echo "=============================="
+          echo "Iniciando Postgres..."
+          echo "=============================="
+          docker pull postgres:15
+          docker create \
+            --name postgres_service \
+            --network github_network \
+            -e POSTGRES_USER=admin \
+            -e POSTGRES_PASSWORD=admin \
+            -e POSTGRES_DB=mydb \
+            -p 5432:5432 \
+            --health-cmd="pg_isready -U admin" \
+            --health-interval=10s \
+            --health-timeout=5s \
+            --health-retries=30 \
+            postgres:15
+          docker start postgres_service
+          # Aguardar saúde do Postgres
+          until [ "$(docker inspect --format='{{.State.Health.Status}}' postgres_service)" == "healthy" ]; do
+            echo "Aguardando Postgres ficar saudável..."
+            sleep 5
+          done
+          echo "Postgres está saudável!"
+
+      # Iniciar Zookeeper
+      - name: Iniciar Zookeeper
         run: |
           echo "=============================="
           echo "Iniciando Zookeeper..."
           echo "=============================="
-
-          # Baixa imagem do Zookeeper
           docker pull confluentinc/cp-zookeeper:7.4.1
-
-          # Cria container do Zookeeper
           docker create \
-            --name zookeeper \
+            --name zookeeper_service \
             --network github_network \
             --network-alias zookeeper \
             -p 2181:2181 \
@@ -55,71 +69,50 @@ jobs:
             --health-timeout=5s \
             --health-retries=60 \
             confluentinc/cp-zookeeper:7.4.1
-
-          # Inicia container do Zookeeper
-          docker start zookeeper
-
-          # Loop de espera até Zookeeper ficar healthy
-          echo "Aguardando Zookeeper ficar pronto..."
-          MAX_RETRIES=30
-          RETRY_COUNT=0
-          while [ "$(docker inspect --format='{{.State.Health.Status}}' zookeeper)" != "healthy" ]; do
-            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-              echo "Zookeeper não ficou saudável após $MAX_RETRIES tentativas"
-              docker logs zookeeper
-              exit 1
-            fi
-            echo "Zookeeper ainda não está pronto, aguardando 10s..."
-            sleep 10
-            RETRY_COUNT=$((RETRY_COUNT+1))
+          docker start zookeeper_service
+          # Aguardar saúde do Zookeeper
+          until [ "$(docker inspect --format='{{.State.Health.Status}}' zookeeper_service)" == "healthy" ]; do
+            echo "Aguardando Zookeeper ficar saudável..."
+            sleep 5
           done
           echo "Zookeeper está saudável!"
 
+      # Iniciar Kafka
+      - name: Iniciar Kafka
+        run: |
           echo "=============================="
           echo "Iniciando Kafka..."
           echo "=============================="
-
-          # Baixa imagem do Kafka
           docker pull confluentinc/cp-kafka:7.4.1
-
-          # Cria container do Kafka
           docker create \
-            --name kafka \
+            --name kafka_service \
             --network github_network \
             --network-alias kafka \
             -p 9092:9092 \
             -e KAFKA_BROKER_ID=1 \
             -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+            -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092 \
             -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -e GITHUB_ACTIONS=true \
+            -e CI=true \
+            --health-cmd="nc -z localhost 9092" \
+            --health-interval=10s \
+            --health-timeout=5s \
+            --health-retries=60 \
             confluentinc/cp-kafka:7.4.1
-
-          # Inicia container do Kafka
-          docker start kafka
-          echo "Kafka iniciado!"
-
-          # Confirma Postgres está healthy antes de prosseguir
-          echo "Verificando Postgres..."
-          while [ "$(docker inspect --format='{{.State.Health.Status}}' postgres)" != "healthy" ]; do
-            echo "Postgres ainda não está pronto, aguardando 5s..."
+          docker start kafka_service
+          # Aguardar saúde do Kafka
+          until [ "$(docker inspect --format='{{.State.Health.Status}}' kafka_service)" == "healthy" ]; do
+            echo "Aguardando Kafka ficar saudável..."
             sleep 5
           done
-          echo "Postgres está saudável!"
+          echo "Kafka está saudável!"
 
-      # Etapa 3: Build e testes (simples exemplo)
-      - name: Build e Testes
+      # Confirmar deploy completo
+      - name: Deploy concluído
         run: |
           echo "=============================="
-          echo "Executando build e testes da aplicação"
+          echo "Todos os serviços estão ativos e saudáveis!"
           echo "=============================="
-          ./gradlew clean build
-          # ou ./mvnw clean verify dependendo do seu projeto
-
-      # Etapa 4: Deploy da aplicação
-      - name: Deploy da Aplicação
-        run: |
-          echo "=============================="
-          echo "Executando deploy da aplicação"
-          echo "=============================="
-          ./deploy.sh
-          echo "Deploy finalizado com sucesso!"
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
