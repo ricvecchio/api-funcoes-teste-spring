@@ -17,7 +17,7 @@ services:
       - microservices-net
 
   zookeeper:
-    image: bitnami/zookeeper:latest
+    image: bitnami/zookeeper:3.8.1
     container_name: zookeeper
     environment:
       ALLOW_ANONYMOUS_LOGIN: "yes"
@@ -32,7 +32,7 @@ services:
       - microservices-net
 
   kafka-broker:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-broker
     environment:
       KAFKA_BROKER_ID: 1
