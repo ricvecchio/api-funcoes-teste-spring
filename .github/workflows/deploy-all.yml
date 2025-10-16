@@ -1,5 +1,6 @@
-name: Deploy Completo
+name: Deploy Completo de Aplicação
 
+# Dispara o workflow em pushes para a branch main
 on:
   push:
     branches:
@@ -8,119 +9,117 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      DOCKER_BUILDKIT: 1
-
     services:
-      # Serviço do Postgres
+      # Serviço Postgres
       postgres:
         image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: appdb
         ports:
           - 5432:5432
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: mydb
         options: >-
-          --health-cmd="pg_isready -U postgres -d appdb"
+          --health-cmd="pg_isready -U user"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
-      # Serviço do Zookeeper
-      zookeeper:
-        image: confluentinc/cp-zookeeper:7.4.1
-        env:
-          ZOOKEEPER_CLIENT_PORT: 2181
-          ZOOKEEPER_TICK_TIME: 2000
-        ports:
-          - 2181:2181
-        options: >-
-          --health-cmd="echo ruok | nc localhost 2181 | grep imok"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=24
-
-      # Serviço do Kafka
-      kafka:
-        image: confluentinc/cp-kafka:7.4.1
-        env:
-          KAFKA_BROKER_ID: 1
-          KAFKA_ZOOKEEPER_CONNECT: localhost:2181
-          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-        ports:
-          - 9092:9092
-        options: >-
-          --health-cmd="kafka-topics --bootstrap-server localhost:9092 --list"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=24
-
     steps:
-      # Passo 1: Checkout do código
-      - name: Fazer checkout do repositório
+      # Etapa 1: Checar código
+      - name: Checar código
         uses: actions/checkout@v3
 
-      # Passo 2: Configurar Java 17 para Spring Boot
-      - name: Configurar Java
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      # Passo 3: Build do backend Spring Boot
-      - name: Build backend (Spring Boot)
-        working-directory: backend
+      # Etapa 2: Inicializar containers
+      - name: Inicializar containers (Zookeeper + Kafka)
         run: |
-          ./mvnw clean package -DskipTests
+          echo "=============================="
+          echo "Iniciando Zookeeper..."
+          echo "=============================="
 
-      # Passo 4: Build do frontend Angular
-      - name: Build frontend (Angular)
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build -- --output-path=dist
+          # Baixa imagem do Zookeeper
+          docker pull confluentinc/cp-zookeeper:7.4.1
 
-      # Passo 5: Build das imagens Docker
-      - name: Build imagens Docker
-        run: |
-          docker build -t meu-app-backend:latest backend/.
-          docker build -t meu-app-frontend:latest frontend/.
+          # Cria container do Zookeeper
+          docker create \
+            --name zookeeper \
+            --network github_network \
+            --network-alias zookeeper \
+            -p 2181:2181 \
+            -e ZOOKEEPER_CLIENT_PORT=2181 \
+            -e ZOOKEEPER_TICK_TIME=2000 \
+            -e GITHUB_ACTIONS=true \
+            -e CI=true \
+            --health-cmd="echo ruok | nc localhost 2181 | grep imok" \
+            --health-interval=10s \
+            --health-timeout=5s \
+            --health-retries=60 \
+            confluentinc/cp-zookeeper:7.4.1
 
-      # Passo 6: Subir containers de infraestrutura (Postgres, Zookeeper, Kafka)
-      - name: Subir containers de infraestrutura
-        run: |
-          docker network create infra_microservices-net || true
-          docker-compose -f docker-compose.infra.yml up -d
+          # Inicia container do Zookeeper
+          docker start zookeeper
 
-      # Passo 7: Esperar serviços ficarem prontos
-      - name: Esperar serviços ficarem prontos
-        run: |
-          echo "Aguardando Postgres..."
-          until docker inspect --format='{{.State.Health.Status}}' infra_postgres_1 | grep healthy; do
+          # Loop de espera até Zookeeper ficar healthy
+          echo "Aguardando Zookeeper ficar pronto..."
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+          while [ "$(docker inspect --format='{{.State.Health.Status}}' zookeeper)" != "healthy" ]; do
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Zookeeper não ficou saudável após $MAX_RETRIES tentativas"
+              docker logs zookeeper
+              exit 1
+            fi
+            echo "Zookeeper ainda não está pronto, aguardando 10s..."
+            sleep 10
+            RETRY_COUNT=$((RETRY_COUNT+1))
+          done
+          echo "Zookeeper está saudável!"
+
+          echo "=============================="
+          echo "Iniciando Kafka..."
+          echo "=============================="
+
+          # Baixa imagem do Kafka
+          docker pull confluentinc/cp-kafka:7.4.1
+
+          # Cria container do Kafka
+          docker create \
+            --name kafka \
+            --network github_network \
+            --network-alias kafka \
+            -p 9092:9092 \
+            -e KAFKA_BROKER_ID=1 \
+            -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            confluentinc/cp-kafka:7.4.1
+
+          # Inicia container do Kafka
+          docker start kafka
+          echo "Kafka iniciado!"
+
+          # Confirma Postgres está healthy antes de prosseguir
+          echo "Verificando Postgres..."
+          while [ "$(docker inspect --format='{{.State.Health.Status}}' postgres)" != "healthy" ]; do
+            echo "Postgres ainda não está pronto, aguardando 5s..."
             sleep 5
           done
-          echo "Postgres pronto!"
+          echo "Postgres está saudável!"
 
-          echo "Aguardando Zookeeper..."
-          until docker inspect --format='{{.State.Health.Status}}' infra_zookeeper_1 | grep healthy; do
-            sleep 5
-          done
-          echo "Zookeeper pronto!"
-
-          echo "Aguardando Kafka..."
-          until docker inspect --format='{{.State.Health.Status}}' infra_kafka_1 | grep healthy; do
-            sleep 5
-          done
-          echo "Kafka pronto!"
-
-      # Passo 8: Subir containers do aplicativo
-      - name: Subir containers do aplicativo
+      # Etapa 3: Build e testes (simples exemplo)
+      - name: Build e Testes
         run: |
-          docker-compose -f docker-compose.app.yml up -d
+          echo "=============================="
+          echo "Executando build e testes da aplicação"
+          echo "=============================="
+          ./gradlew clean build
+          # ou ./mvnw clean verify dependendo do seu projeto
 
-      # Passo 9: Limpeza de containers antigos e dangling images
-      - name: Limpar containers e imagens antigas
+      # Etapa 4: Deploy da aplicação
+      - name: Deploy da Aplicação
         run: |
-          docker system prune -f
+          echo "=============================="
+          echo "Executando deploy da aplicação"
+          echo "=============================="
+          ./deploy.sh
+          echo "Deploy finalizado com sucesso!"
