@@ -1,153 +1,53 @@
-version: '3.8'
+name: CI/CD - Docker Compose (Enxuto 🚀)
 
-services:
-  # 🐘 PostgreSQL Database
-  postgres-db:
-    image: postgres:15-alpine
-    container_name: postgres-db
-    environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "${DB_PORT}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app-network
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
-  # 🐘 Zookeeper (para Kafka)
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "${ZOOKEEPER_PORT}:2181"
-    healthcheck:
-      test: ["CMD-SHELL", "echo stat | nc localhost 2181 | grep Mode"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app-network
+jobs:
+  docker-compose:
+    runs-on: ubuntu-latest
+    env:
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.8-9/x64
 
-  # 📊 Kafka Broker
-  kafka-broker:
-    image: confluentinc/cp-kafka:7.4.0
-    container_name: kafka-broker
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT},PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "9092:9092"
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:${KAFKA_BROKER_PORT}"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 45s
-    networks:
-      - app-network
+    steps:
+      # 1️⃣ Clonar o código
+      - name: Checkout do código
+        uses: actions/checkout@v3
 
-  # 🏦 Conta Service
-  conta-service:
-    build:
-      context: ../conta-service
-      dockerfile: Dockerfile
-    container_name: conta-service
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-      kafka-broker:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-    ports:
-      - "8080:8080"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - app-network
+      # 2️⃣ Configurar Docker Buildx (multi-plataforma)
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-  # 🔄 Transacao Service
-  transacao-service:
-    build:
-      context: ../transacao-service
-      dockerfile: Dockerfile
-    container_name: transacao-service
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-      kafka-broker:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-    ports:
-      - "8081:8081"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - app-network
+      # 3️⃣ Configurar QEMU (multi-plataforma)
+      - name: Configurar QEMU
+        uses: docker/setup-qemu-action@v2
 
-  # 📈 Api Gateway
-  api-gateway:
-    build:
-      context: ../api-gateway
-      dockerfile: Dockerfile
-    container_name: api-gateway
-    depends_on:
-      conta-service:
-        condition: service_healthy
-      transacao-service:
-        condition: service_healthy
-    ports:
-      - "8082:8082"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - app-network
+      # 4️⃣ Configurar Java 21
+      - name: Configurar Java 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 21
 
-# 📦 Volumes para persistência de dados
-volumes:
-  postgres_data:
-    driver: local
+      # 5️⃣ Entrar na pasta infra
+      - name: Entrar na pasta infra
+        working-directory: ./infra
+        run: |
+          echo "Diretório atual: $(pwd)"
+          ls -la
 
-# 🌐 Rede para comunicação entre serviços
-networks:
-  app-network:
-    driver: bridge
+      # 6️⃣ Build e start Docker Compose (com --wait para healthchecks)
+      - name: Build e start Docker Compose
+        working-directory: ./infra
+        run: |
+          docker compose --env-file .env up --build --wait -d
+
+      # 7️⃣ Listar containers em execução
+      - name: Listar containers em execução
+        working-directory: ./infra
+        run: docker compose ps
