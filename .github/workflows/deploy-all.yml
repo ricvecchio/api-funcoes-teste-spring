@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  ci-deploy:
+  deploy:
     runs-on: ubuntu-latest
+
     env:
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.8-9/x64
-      JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.8-9/x64
       POSTGRES_PORT: 5432
       ZOOKEEPER_PORT: 2181
       KAFKA_BROKER_PORT: 9092
@@ -22,23 +22,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v2
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 21
 
-      - name: 🚀 Start CI infrastructure Postgres + Zookeeper
+      - name: Build and run infrastructure
         run: |
           set -euo pipefail
-          echo "🚀 Iniciando infra CI: postgres + zookeeper..."
-          docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml up -d postgres zookeeper
 
+          echo "🚀 Iniciando infra CI: postgres + zookeeper..."
+          docker compose -f ./infra/docker-compose.yml up -d postgres zookeeper
+          
           echo "⏳ Aguardando Zookeeper (até 120s)..."
           max_attempts=24
           attempt=1
           until docker exec zookeeper bash -c "echo ruok | nc -w 1 127.0.0.1 2181 | grep imok" >/dev/null 2>&1; do
             if [ $attempt -ge $max_attempts ]; then
               echo "❌ Zookeeper não ficou pronto após $((max_attempts*5))s"
-              docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml logs zookeeper --tail=200
-              docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+              docker compose -f ./infra/docker-compose.yml logs zookeeper --tail=200
+              docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
               exit 1
             fi
             echo "⏳ Zookeeper não está pronto... tentativa $attempt/$max_attempts"
@@ -46,20 +50,18 @@ jobs:
             sleep 5
           done
           echo "✅ Zookeeper pronto!"
-
-      - name: 🚀 Start Kafka Broker
-        run: |
+          
           echo "🚀 Subindo Kafka broker..."
-          docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml up -d kafka-broker
-
+          docker compose -f ./infra/docker-compose.yml up -d kafka-broker
+          
           echo "⏳ Aguardando Kafka Broker (até 90s)..."
           max_attempts=18
           attempt=1
           until docker exec kafka-broker bash -c "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"; do
             if [ $attempt -ge $max_attempts ]; then
               echo "❌ Kafka Broker não pronto após $((max_attempts*5))s"
-              docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml logs kafka-broker --tail=200
-              docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+              docker compose -f ./infra/docker-compose.yml logs kafka-broker --tail=200
+              docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
               exit 1
             fi
             echo "⏳ Kafka Broker não está pronto... tentativa $attempt/$max_attempts"
@@ -67,12 +69,10 @@ jobs:
             sleep 5
           done
           echo "✅ Kafka Broker pronto!"
-
-      - name: 🚀 Start application services
-        run: |
+          
           echo "🚀 Subindo serviços de aplicação..."
-          docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml up -d conta-service kafka-service
-
+          docker compose -f ./infra/docker-compose.yml up -d conta-service kafka-service
+          
           echo "⏳ Healthchecks dos serviços (até 2 min)..."
           for svc in conta-service kafka-service; do
             max_try=24
@@ -82,8 +82,8 @@ jobs:
             while ! curl -s -f "http://localhost:${port}/actuator/health" >/dev/null 2>&1; do
               if [ $try -ge $max_try ]; then
                 echo "❌ $svc healthcheck failed"
-                docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml logs $svc --tail=200
-                docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+                docker compose -f ./infra/docker-compose.yml logs $svc --tail=200
+                docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
                 exit 1
               fi
               echo "⏳ $svc não está pronto... tentativa $try/$max_try"
@@ -92,8 +92,6 @@ jobs:
             done
             echo "✅ $svc ok"
           done
-
-      - name: 🎉 Cleanup
-        run: |
+          
           echo "🎉 Integração OK - limpando ambientes..."
-          docker compose -f ./api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+          docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
