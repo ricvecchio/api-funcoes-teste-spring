@@ -1,97 +1,126 @@
-name: Deploy All Services
+name: Deploy Completo
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     env:
-      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.8-9/x64
-      POSTGRES_PORT: 5432
-      ZOOKEEPER_PORT: 2181
-      KAFKA_BROKER_PORT: 9092
-      CONTA_SERVICE_PORT: 8081
-      KAFKA_SERVICE_PORT: 8082
+      DOCKER_BUILDKIT: 1
+
+    services:
+      # Serviço do Postgres
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: appdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d appdb"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      # Serviço do Zookeeper
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.4.1
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+        ports:
+          - 2181:2181
+        options: >-
+          --health-cmd="echo ruok | nc localhost 2181 | grep imok"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=24
+
+      # Serviço do Kafka
+      kafka:
+        image: confluentinc/cp-kafka:7.4.1
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: localhost:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd="kafka-topics --bootstrap-server localhost:9092 --list"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=24
 
     steps:
-      - name: Checkout repository
+      # Passo 1: Checkout do código
+      - name: Fazer checkout do repositório
         uses: actions/checkout@v3
 
-      - name: Set up Java
+      # Passo 2: Configurar Java 17 para Spring Boot
+      - name: Configurar Java
         uses: actions/setup-java@v3
         with:
-          distribution: temurin
-          java-version: 21
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Build and run infrastructure
+      # Passo 3: Build do backend Spring Boot
+      - name: Build backend (Spring Boot)
+        working-directory: backend
         run: |
-          set -euo pipefail
+          ./mvnw clean package -DskipTests
 
-          echo "🚀 Iniciando infra CI: postgres + zookeeper..."
-          docker compose -f ./infra/docker-compose.yml up -d postgres zookeeper
-          
-          echo "⏳ Aguardando Zookeeper (até 120s)..."
-          max_attempts=24
-          attempt=1
-          until docker exec zookeeper bash -c "echo ruok | nc -w 1 127.0.0.1 2181 | grep imok" >/dev/null 2>&1; do
-            if [ $attempt -ge $max_attempts ]; then
-              echo "❌ Zookeeper não ficou pronto após $((max_attempts*5))s"
-              docker compose -f ./infra/docker-compose.yml logs zookeeper --tail=200
-              docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
-              exit 1
-            fi
-            echo "⏳ Zookeeper não está pronto... tentativa $attempt/$max_attempts"
-            attempt=$((attempt+1))
+      # Passo 4: Build do frontend Angular
+      - name: Build frontend (Angular)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build -- --output-path=dist
+
+      # Passo 5: Build das imagens Docker
+      - name: Build imagens Docker
+        run: |
+          docker build -t meu-app-backend:latest backend/.
+          docker build -t meu-app-frontend:latest frontend/.
+
+      # Passo 6: Subir containers de infraestrutura (Postgres, Zookeeper, Kafka)
+      - name: Subir containers de infraestrutura
+        run: |
+          docker network create infra_microservices-net || true
+          docker-compose -f docker-compose.infra.yml up -d
+
+      # Passo 7: Esperar serviços ficarem prontos
+      - name: Esperar serviços ficarem prontos
+        run: |
+          echo "Aguardando Postgres..."
+          until docker inspect --format='{{.State.Health.Status}}' infra_postgres_1 | grep healthy; do
             sleep 5
           done
-          echo "✅ Zookeeper pronto!"
-          
-          echo "🚀 Subindo Kafka broker..."
-          docker compose -f ./infra/docker-compose.yml up -d kafka-broker
-          
-          echo "⏳ Aguardando Kafka Broker (até 90s)..."
-          max_attempts=18
-          attempt=1
-          until docker exec kafka-broker bash -c "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"; do
-            if [ $attempt -ge $max_attempts ]; then
-              echo "❌ Kafka Broker não pronto após $((max_attempts*5))s"
-              docker compose -f ./infra/docker-compose.yml logs kafka-broker --tail=200
-              docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
-              exit 1
-            fi
-            echo "⏳ Kafka Broker não está pronto... tentativa $attempt/$max_attempts"
-            attempt=$((attempt+1))
+          echo "Postgres pronto!"
+
+          echo "Aguardando Zookeeper..."
+          until docker inspect --format='{{.State.Health.Status}}' infra_zookeeper_1 | grep healthy; do
             sleep 5
           done
-          echo "✅ Kafka Broker pronto!"
-          
-          echo "🚀 Subindo serviços de aplicação..."
-          docker compose -f ./infra/docker-compose.yml up -d conta-service kafka-service
-          
-          echo "⏳ Healthchecks dos serviços (até 2 min)..."
-          for svc in conta-service kafka-service; do
-            max_try=24
-            try=1
-            port=8081
-            if [ "$svc" = "kafka-service" ]; then port=8082; fi
-            while ! curl -s -f "http://localhost:${port}/actuator/health" >/dev/null 2>&1; do
-              if [ $try -ge $max_try ]; then
-                echo "❌ $svc healthcheck failed"
-                docker compose -f ./infra/docker-compose.yml logs $svc --tail=200
-                docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
-                exit 1
-              fi
-              echo "⏳ $svc não está pronto... tentativa $try/$max_try"
-              try=$((try+1))
-              sleep 5
-            done
-            echo "✅ $svc ok"
+          echo "Zookeeper pronto!"
+
+          echo "Aguardando Kafka..."
+          until docker inspect --format='{{.State.Health.Status}}' infra_kafka_1 | grep healthy; do
+            sleep 5
           done
-          
-          echo "🎉 Integração OK - limpando ambientes..."
-          docker compose -f ./infra/docker-compose.yml down -v --remove-orphans
+          echo "Kafka pronto!"
+
+      # Passo 8: Subir containers do aplicativo
+      - name: Subir containers do aplicativo
+        run: |
+          docker-compose -f docker-compose.app.yml up -d
+
+      # Passo 9: Limpeza de containers antigos e dangling images
+      - name: Limpar containers e imagens antigas
+        run: |
+          docker system prune -f
