@@ -57,10 +57,10 @@ services:
 
   # 🏦 Conta Service (Spring Boot)
   conta-service:
-    image: conta-service:latest
     build:
-      context: ../
+      context: ../conta-service   # caminho ajustado para a pasta do Dockerfile
       dockerfile: Dockerfile
+    image: conta-service:latest
     container_name: conta-service
     depends_on:
       postgres-db:
