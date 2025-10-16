@@ -82,7 +82,7 @@ services:
         echo "✅ Dependências disponíveis! Iniciando aplicação Spring Boot..."
         java -jar /app/app.jar
 
-  # 🔄 Kafka Service (processo assíncrono de validação)
+  # 🔄 Kafka Service (processamento assíncrono)
   kafka-service:
     build:
       context: ../kafka-service
@@ -92,16 +92,24 @@ services:
     depends_on:
       - kafka-broker
     environment:
+      # Configuração de Kafka via variável do .env
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
+
+      # Configuração de banco de dados via variável (mesma estrutura que conta-service)
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+
     ports:
-      - "${KAFKA_SERVICE_PORT}:8080" # Mesmo padrão: porta interna 8080, externa via variável
+      - "${KAFKA_SERVICE_PORT}:8080" # Porta interna fixa (8080), externa configurável via variável
+
     command:
       - sh
       - -c
       - |
-        echo "🕒 Aguardando Kafka ficar pronto..."
-        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && break; echo "⏳ Esperando Kafka... ($i/30)"; sleep 3; done'
-        echo "✅ Kafka disponível! Iniciando serviço Kafka..."
+        echo "🕒 Aguardando Kafka e Postgres ficarem prontos..."
+        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências... ($i/30)"; sleep 3; done'
+        echo "✅ Dependências disponíveis! Iniciando serviço Kafka..."
         java -jar /app/app.jar
 
 # Volume persistente para o banco
