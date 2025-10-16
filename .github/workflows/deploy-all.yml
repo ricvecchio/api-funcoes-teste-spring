@@ -1,4 +1,4 @@
-name: Deploy All Services
+name: Deploy All Services no GitHub Actions
 
 on:
   push:
@@ -7,28 +7,88 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-services:
     runs-on: ubuntu-latest
-    env:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mydb
-      KAFKA_BROKER: localhost:9092
-
     steps:
-      # 1. Checkout do código
-      - name: Checkout do repositório
+      - name: Checkout do código
         uses: actions/checkout@v3
 
-      # 2. Configurar Docker e criar rede customizada
-      - name: Configurar rede Docker
+      ##############################################
+      # Criar rede Docker para comunicação entre containers
+      ##############################################
+      - name: Criar rede Docker
+        run: |
+          docker network inspect github_network >/dev/null 2>&1 || \
+          docker network create github_network
+          echo "Rede github_network criada/confirmada."
+
+      ##############################################
+      # Iniciar Zookeeper com retry robusto baseado em logs
+      ##############################################
+      - name: Iniciar Zookeeper
         run: |
           echo "=============================="
-          echo "Criando rede Docker github_network..."
+          echo "Iniciando Zookeeper..."
           echo "=============================="
-          docker network create github_network || echo "Rede já existe"
+          docker pull confluentinc/cp-zookeeper:7.4.1
+          docker run -d \
+            --name zookeeper_service \
+            --network github_network \
+            -e ZOOKEEPER_CLIENT_PORT=2181 \
+            -e ZOOKEEPER_TICK_TIME=2000 \
+            -p 2181:2181 \
+            confluentinc/cp-zookeeper:7.4.1
 
-      # 3. Iniciar Postgres
+          MAX_RETRIES=40
+          RETRY_COUNT=0
+          until docker logs zookeeper_service 2>&1 | grep -q "binding to port 0.0.0.0/0.0.0.0:2181"; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Erro: Zookeeper não iniciou após $MAX_RETRIES tentativas"
+              docker logs zookeeper_service
+              exit 1
+            fi
+            echo "Aguardando Zookeeper iniciar... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
+            sleep 5
+          done
+          echo "Zookeeper está pronto!"
+
+      ##############################################
+      # Iniciar Kafka com retry robusto baseado em logs
+      ##############################################
+      - name: Iniciar Kafka
+        run: |
+          echo "=============================="
+          echo "Iniciando Kafka..."
+          echo "=============================="
+          docker pull confluentinc/cp-kafka:7.4.1
+          docker run -d \
+            --name kafka_service \
+            --network github_network \
+            -e KAFKA_BROKER_ID=1 \
+            -e KAFKA_ZOOKEEPER_CONNECT=zookeeper_service:2181 \
+            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+            -p 9092:9092 \
+            confluentinc/cp-kafka:7.4.1
+
+          MAX_RETRIES=40
+          RETRY_COUNT=0
+          until docker logs kafka_service 2>&1 | grep -q "started \(kafka.server.KafkaServer\)"; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Erro: Kafka não iniciou após $MAX_RETRIES tentativas"
+              docker logs kafka_service
+              exit 1
+            fi
+            echo "Aguardando Kafka iniciar... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
+            sleep 5
+          done
+          echo "Kafka está pronto!"
+
+      ##############################################
+      # Iniciar Postgres
+      ##############################################
       - name: Iniciar Postgres
         run: |
           echo "=============================="
@@ -38,98 +98,19 @@ jobs:
           docker run -d \
             --name postgres_service \
             --network github_network \
-            -e POSTGRES_USER=$POSTGRES_USER \
-            -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
-            -e POSTGRES_DB=$POSTGRES_DB \
+            -e POSTGRES_USER=admin \
+            -e POSTGRES_PASSWORD=admin \
+            -e POSTGRES_DB=mydb \
             -p 5432:5432 \
             postgres:15
+          echo "Postgres iniciado com usuário 'admin' e banco 'mydb'."
 
-          # Retry até Postgres estar pronto
-          MAX_RETRIES=30
-          RETRY_COUNT=0
-          until docker exec postgres_service pg_isready -U $POSTGRES_USER > /dev/null 2>&1; do
-            RETRY_COUNT=$((RETRY_COUNT+1))
-            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-              echo "Erro: Postgres não ficou pronto após $MAX_RETRIES tentativas"
-              docker logs postgres_service
-              exit 1
-            fi
-            echo "Aguardando Postgres ficar pronto... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
-            sleep 5
-          done
-          echo "Postgres está pronto!"
-
-      # 4. Iniciar Zookeeper
-      - name: Iniciar Zookeeper
+      ##############################################
+      # Listar containers ativos
+      ##############################################
+      - name: Verificar containers
         run: |
           echo "=============================="
-          echo "Iniciando Zookeeper..."
+          echo "Containers ativos:"
           echo "=============================="
-          docker pull confluentinc/cp-zookeeper:7.4.1
-          docker create \
-            --name zookeeper_service \
-            --network github_network \
-            --network-alias zookeeper \
-            -p 2181:2181 \
-            -e ZOOKEEPER_CLIENT_PORT=2181 \
-            -e ZOOKEEPER_TICK_TIME=2000 \
-            confluentinc/cp-zookeeper:7.4.1
-          docker start zookeeper_service
-
-          # Retry até Zookeeper responder
-          MAX_RETRIES=30
-          RETRY_COUNT=0
-          until docker exec zookeeper_service /bin/sh -c "echo ruok | nc localhost 2181 | grep imok" > /dev/null 2>&1; do
-            RETRY_COUNT=$((RETRY_COUNT+1))
-            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-              echo "Erro: Zookeeper não ficou pronto após $MAX_RETRIES tentativas"
-              docker logs zookeeper_service
-              exit 1
-            fi
-            echo "Aguardando Zookeeper ficar pronto... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
-            sleep 5
-          done
-          echo "Zookeeper está pronto!"
-
-      # 5. Iniciar Kafka
-      - name: Iniciar Kafka
-        run: |
-          echo "=============================="
-          echo "Iniciando Kafka..."
-          echo "=============================="
-          docker pull confluentinc/cp-kafka:7.4.1
-          docker create \
-            --name kafka_service \
-            --network github_network \
-            -p 9092:9092 \
-            -e KAFKA_BROKER_ID=1 \
-            -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
-            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
-            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-            confluentinc/cp-kafka:7.4.1
-          docker start kafka_service
-
-          # Retry até Kafka estar pronto (porta 9092 aberta)
-          MAX_RETRIES=30
-          RETRY_COUNT=0
-          until nc -z localhost 9092 > /dev/null 2>&1; do
-            RETRY_COUNT=$((RETRY_COUNT+1))
-            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-              echo "Erro: Kafka não ficou pronto após $MAX_RETRIES tentativas"
-              docker logs kafka_service
-              exit 1
-            fi
-            echo "Aguardando Kafka ficar pronto... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
-            sleep 5
-          done
-          echo "Kafka está pronto!"
-
-      # 6. Todos os serviços prontos
-      - name: Todos os serviços prontos
-        run: |
-          echo "=============================="
-          echo "Todos os serviços estão ativos e prontos!"
-          echo "Postgres: localhost:5432"
-          echo "Zookeeper: localhost:2181"
-          echo "Kafka: localhost:9092"
-          echo "=============================="
+          docker ps -a
