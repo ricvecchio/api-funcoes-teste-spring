@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   # 🐘 Banco de dados PostgreSQL
   postgres-db:
@@ -8,11 +10,11 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"
+      - "${DB_PORT}:5432" # Mapeia a porta do host para o container
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data # Volume persistente do banco
 
-  # 🐦 Zookeeper (para Kafka)
+  # 🐦 Zookeeper (necessário para o Kafka)
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper
@@ -20,9 +22,9 @@ services:
       ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}" # Usa variável para maior flexibilidade
 
-  # 🥨 Kafka broker
+  # 🥨 Kafka broker principal
   kafka-broker:
     image: confluentinc/cp-kafka:7.3.0
     container_name: kafka-broker
@@ -43,11 +45,12 @@ services:
       - -c
       - |
         echo "🕒 Esperando o Zookeeper ficar pronto..."
+        # Aguarda até 30 tentativas de conexão com o Zookeeper antes de iniciar o Kafka
         /bin/bash -c 'for i in {1..30}; do nc -z zookeeper ${ZOOKEEPER_PORT} && break; echo "⏳ Tentando conectar ao Zookeeper... ($i/30)"; sleep 3; done'
         echo "✅ Zookeeper pronto! Iniciando Kafka..."
         /etc/confluent/docker/run
 
-  # 🏦 Conta Service (Spring Boot)
+  # 🏦 Conta Service (microserviço REST principal)
   conta-service:
     build:
       context: ../conta-service
@@ -58,20 +61,49 @@ services:
       - postgres-db
       - kafka-broker
     environment:
+      # Configuração de banco de dados (via variáveis .env)
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+
+      # Configuração de Kafka
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
+
     ports:
-      - "${CONTA_SERVICE_PORT}:${CONTA_SERVICE_PORT}"
+      - "${CONTA_SERVICE_PORT}:8080" # Porta interna fixa (8080), externa configurável via variável
+
     command:
       - sh
       - -c
       - |
-        echo "🕒 Esperando o Kafka e o Postgres ficarem prontos..."
+        echo "🕒 Esperando Kafka e Postgres ficarem prontos..."
+        # Garante que dependências estejam disponíveis antes de iniciar
         /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências... ($i/30)"; sleep 3; done'
         echo "✅ Dependências disponíveis! Iniciando aplicação Spring Boot..."
         java -jar /app/app.jar
 
+  # 🔄 Kafka Service (processo assíncrono de validação)
+  kafka-service:
+    build:
+      context: ../kafka-service
+      dockerfile: Dockerfile
+    image: kafka-service:latest
+    container_name: kafka-service
+    depends_on:
+      - kafka-broker
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
+    ports:
+      - "${KAFKA_SERVICE_PORT}:8080" # Mesmo padrão: porta interna 8080, externa via variável
+    command:
+      - sh
+      - -c
+      - |
+        echo "🕒 Aguardando Kafka ficar pronto..."
+        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && break; echo "⏳ Esperando Kafka... ($i/30)"; sleep 3; done'
+        echo "✅ Kafka disponível! Iniciando serviço Kafka..."
+        java -jar /app/app.jar
+
+# Volume persistente para o banco
 volumes:
   postgres_data:
