@@ -29,7 +29,7 @@ services:
     healthcheck:
       test: [ "CMD-SHELL", "echo ruok | nc localhost $${ZOOKEEPER_PORT} | grep imok" ]
       interval: 10s
-      timeout: 10s
+      timeout: 5s
       retries: 12
 
   # 🥨 Kafka broker
