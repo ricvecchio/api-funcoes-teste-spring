@@ -1,19 +1,16 @@
-networks:
-  microservices-net:
-    driver: bridge
+version: '3.9'
 
 services:
   postgres-db:
     image: postgres:15
-    container_name: postgres-db
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
       POSTGRES_DB: mydb
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U myuser"]
+      test: ["CMD-SHELL", "pg_isready -U user -d mydb"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,14 +18,13 @@ services:
       - microservices-net
 
   zookeeper:
-    image: bitnami/zookeeper:3.9
-    container_name: zookeeper
+    image: bitnami/zookeeper:latest
     environment:
       ALLOW_ANONYMOUS_LOGIN: "yes"
     ports:
       - "2181:2181"
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      test: ["CMD", "zkServer.sh", "status"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,20 +32,19 @@ services:
       - microservices-net
 
   kafka-broker:
-    image: bitnami/kafka:3.6
-    container_name: kafka-broker
-    ports:
-      - "9092:9092"
+    image: bitnami/kafka:latest
     environment:
-      KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL: PLAINTEXT
     depends_on:
       zookeeper:
         condition: service_healthy
+    ports:
+      - "9092:9092"
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --list --bootstrap-server localhost:9092"]
+      test: ["CMD", "kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,11 +53,14 @@ services:
 
   conta-service:
     build:
-      context: ../conta-service
+      context: ./infra/conta-service
       dockerfile: Dockerfile
-    container_name: conta-service
     ports:
-      - "8081:8081"
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/mydb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -71,13 +69,18 @@ services:
 
   kafka-service:
     build:
-      context: ../kafka-service
+      context: ./infra/kafka-service
       dockerfile: Dockerfile
-    container_name: kafka-service
     ports:
-      - "8082:8082"
+      - "8082:8080"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
     depends_on:
       kafka-broker:
         condition: service_healthy
     networks:
       - microservices-net
+
+networks:
+  microservices-net:
+    driver: bridge
