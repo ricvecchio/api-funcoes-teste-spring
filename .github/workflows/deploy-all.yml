@@ -9,9 +9,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ======================================
+      # Checkout do repositório
+      # ======================================
       - name: 📥 Checkout do repositório
         uses: actions/checkout@v4
 
+      # ======================================
+      # Configurar JDK 21 com cache Maven
+      # ======================================
       - name: ☕ Configurar JDK 21
         uses: actions/setup-java@v4
         with:
@@ -19,49 +25,78 @@ jobs:
           java-version: 21
           cache: maven
 
+      # ======================================
+      # Build dos serviços Maven (skip tests)
+      # ======================================
       - name: 🧱 Build dos serviços
         run: |
           cd conta-service && mvn clean package -DskipTests -q
           cd ../kafka-service && mvn clean package -DskipTests -q
 
+      # ======================================
+      # Instalar ferramentas auxiliares
+      # ======================================
       - name: 🧩 Instalar dependências auxiliares
         run: sudo apt-get update && sudo apt-get install -y curl netcat-openbsd
 
+      # ======================================
+      # Build das imagens Docker
+      # ======================================
       - name: 🐳 Build das imagens Docker
         run: |
           docker build -t conta-service:latest -f conta-service/Dockerfile conta-service
           docker build -t kafka-service:latest -f kafka-service/Dockerfile kafka-service
 
-      - name: 🚀 Subir ambiente completo com Docker Compose
+      # ======================================
+      # Subir ambiente completo com Docker Compose
+      # ======================================
+      - name: 🚀 Subir ambiente Docker Compose
         run: |
           cd infra
           docker compose --env-file .env up -d --build
 
-      - name: 🕓 Aguardar serviços ficarem saudáveis
+      # ======================================
+      # Aguardar serviços ficarem saudáveis
+      # ======================================
+      - name: 🕓 Aguardar containers ficarem saudáveis
         run: |
           echo "⏳ Aguardando containers ficarem saudáveis..."
           timeout 900 bash -c '
+            # Conta-service
             until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ]; do
               echo "⏳ Aguardando conta-service..."; sleep 15;
             done
+            echo "✅ conta-service saudável!"
+
+            # Kafka-service
             until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ]; do
               echo "⏳ Aguardando kafka-service..."; sleep 15;
             done
+            echo "✅ kafka-service saudável!"
           '
           docker compose -f infra/docker-compose.yml ps
 
-      - name: 🔍 Testar endpoints dos serviços
+      # ======================================
+      # Testar endpoints dos serviços
+      # ======================================
+      - name: 🔍 Testar endpoints
         run: |
           echo "✅ Verificando conta-service"
-          curl -f http://localhost:8081/actuator/health
+          curl -f http://localhost:${CONTA_SERVICE_PORT}/actuator/health
           echo "✅ Verificando kafka-service"
-          curl -f http://localhost:8082/actuator/health
+          curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
 
-      - name: 🧪 Executar testes automáticos Maven
+      # ======================================
+      # Executar testes automáticos Maven
+      # ======================================
+      - name: 🧪 Executar testes Maven
         run: |
           cd conta-service && mvn test -q
           cd ../kafka-service && mvn test -q
 
+      # ======================================
+      # Logs detalhados em caso de falha
+      # ======================================
       - name: 📄 Logs em caso de falha
         if: failure()
         run: |
@@ -70,6 +105,9 @@ jobs:
           docker logs kafka-service || true
           docker logs postgres-db || true
 
+      # ======================================
+      # Limpeza final do Docker
+      # ======================================
       - name: 🧹 Limpeza final
         if: always()
         run: |
