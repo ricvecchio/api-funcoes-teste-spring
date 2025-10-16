@@ -175,9 +175,10 @@ jobs:
 
       - name: Executar Docker Compose e Healthcheck
         run: |
-          docker compose -f docker-compose-ci.yml up -d
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml up -d --build
           echo "⏳ Aguardando containers ficarem saudáveis..."
-          docker compose -f docker-compose-ci.yml wait
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml ps
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml wait || docker compose logs
 
       - name: Testar serviços via Health Endpoint
         run: |
