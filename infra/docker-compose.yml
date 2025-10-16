@@ -1,74 +1,68 @@
+version: '3.9'
+
 services:
-  # 🐘 PostgreSQL Database
+  # 🐘 Banco de dados PostgreSQL
   postgres-db:
-    image: postgres:15-alpine
+    image: postgres:15
     container_name: postgres-db
     environment:
-      POSTGRES_DB: ${DB_NAME:-appdb}
-      POSTGRES_USER: ${DB_USER:-appuser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-apppass123}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-appuser} -d ${DB_NAME:-appdb}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_NAME}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app-network
+      retries: 10
 
-  # 🐘 Zookeeper (para Kafka)
+  # 🐦 Zookeeper (para Kafka)
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
+    image: confluentinc/cp-zookeeper:8.3.1
     container_name: zookeeper
     environment:
-      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT:-2181}
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "${ZOOKEEPER_PORT:-2181}:2181"
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "echo stat | nc localhost 2181 | grep Mode"]
-      interval: 10s
+      test: ["CMD-SHELL", "nc -z localhost $${ZOOKEEPER_PORT}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app-network
+      retries: 12
 
-  # 📊 Kafka Broker
+  # 🥨 Kafka broker
   kafka-broker:
-    image: confluentinc/cp-kafka:7.4.0
+    image: confluentinc/cp-kafka:8.3.1
     container_name: kafka-broker
     depends_on:
       zookeeper:
         condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT:-2181}
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT:-29092},PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     ports:
-      - "9092:9092"
+      - "${KAFKA_BROKER_PORT}:${KAFKA_BROKER_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:${KAFKA_BROKER_PORT:-29092} || exit 0"]
-      interval: 15s
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:$${KAFKA_BROKER_PORT}"]
+      interval: 10s
       timeout: 10s
-      retries: 5
-      start_period: 45s
-    networks:
-      - app-network
+      retries: 10
 
-  # 🏦 Conta Service
+  # 🏦 Conta Service (Spring Boot)
   conta-service:
+    image: conta-service:latest
     build:
-      context: ..
-      dockerfile: conta-service/Dockerfile
+      context: ../
+      dockerfile: Dockerfile
     container_name: conta-service
     depends_on:
       postgres-db:
@@ -76,80 +70,17 @@ services:
       kafka-broker:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME:-appdb}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-appuser}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-apppass123}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT:-29092}
-      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
     ports:
-      - "8080:8080"
+      - "${CONTA_SERVICE_PORT}:${CONTA_SERVICE_PORT}"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - app-network
+      test: ["CMD-SHELL", "curl -f http://localhost:$${CONTA_SERVICE_PORT}/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
-  # 🔄 Transacao Service
-  transacao-service:
-    build:
-      context: ..
-      dockerfile: transacao-service/Dockerfile
-    container_name: transacao-service
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-      kafka-broker:
-        condition: service_healthy
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME:-appdb}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-appuser}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-apppass123}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT:-29092}
-      SERVER_PORT: 8081
-    ports:
-      - "8081:8081"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - app-network
-
-  # 📈 Api Gateway
-  api-gateway:
-    build:
-      context: ..
-      dockerfile: api-gateway/Dockerfile
-    container_name: api-gateway
-    depends_on:
-      conta-service:
-        condition: service_healthy
-      transacao-service:
-        condition: service_healthy
-    environment:
-      SERVER_PORT: 8082
-    ports:
-      - "8082:8082"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - app-network
-
-# 📦 Volumes para persistência de dados
 volumes:
   postgres_data:
-    driver: local
-
-# 🌐 Rede para comunicação entre serviços
-networks:
-  app-network:
-    driver: bridge
