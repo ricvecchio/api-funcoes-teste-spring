@@ -1,137 +1,87 @@
-# ============================================================
-# 🧱 DOCKER COMPOSE PARA PIPELINE DE CI
-# Infra mínima: Postgres + Zookeeper + Kafka + Serviços
-# ============================================================
+name: 🧱 CI - Integração Completa
 
-version: '3.8'
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
-services:
-  # ----------------------------------------------------------
-  # 🐘 POSTGRES
-  # Banco de dados usado nos testes de integração.
-  # ----------------------------------------------------------
-  postgres:
-    image: postgres:15-alpine
-    container_name: postgres
-    environment:
-      POSTGRES_DB: conta_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    networks:
-      - microservices-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d conta_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # ------------------------------------------------------------
+      # 🧩 Checkout do código fonte
+      # ------------------------------------------------------------
+      - name: 📦 Checkout do repositório
+        uses: actions/checkout@v4
 
-  # ----------------------------------------------------------
-  # 🦓 ZOOKEEPER
-  # Usado pelo Kafka como service discovery e coordenação.
-  # A tag '3.7.1' é estável e compatível com Kafka 3.x.
-  # ----------------------------------------------------------
-  zookeeper:
-    image: bitnami/zookeeper:3.7.1
-    container_name: zookeeper
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-    ports:
-      - "2181:2181"
-    networks:
-      - microservices-net
-    healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc -w 1 127.0.0.1 2181 | grep imok || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
+      # ------------------------------------------------------------
+      # ⚙️ Configuração do ambiente Docker Compose
+      # ------------------------------------------------------------
+      - name: 🐳 Configurar Docker Compose e Infra CI
+        run: |
+          set -euo pipefail
+          echo "🚀 Iniciando infra CI: postgres + zookeeper..."
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml up -d postgres zookeeper
 
-  # ----------------------------------------------------------
-  # 🦜 KAFKA BROKER
-  # Broker principal usado pelos microserviços para mensageria.
-  # A versão 3.9.0 é estável e compatível com Zookeeper 3.7.x.
-  # ----------------------------------------------------------
-  kafka-broker:
-    image: bitnami/kafka:3.9.0
-    container_name: kafka-broker
-    environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - KAFKA_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-broker:9092
-      - ALLOW_PLAINTEXT_LISTENER=yes
-    ports:
-      - "9092:9092"
-    networks:
-      - microservices-net
-    depends_on:
-      - zookeeper
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
-      interval: 8s
-      timeout: 5s
-      retries: 6
-      start_period: 20s
+          echo "⏳ Aguardando Zookeeper (até 120s)..."
+          max_attempts=24
+          attempt=1
+          until docker exec zookeeper bash -c "echo ruok | nc -w 1 127.0.0.1 2181 | grep imok" >/dev/null 2>&1; do
+            if [ $attempt -ge $max_attempts ]; then
+              echo "❌ Zookeeper não ficou pronto após $((max_attempts*5))s"
+              docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml logs zookeeper --tail=200
+              docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+              exit 1
+            fi
+            echo "⏳ Zookeeper não está pronto... tentativa $attempt/$max_attempts"
+            attempt=$((attempt+1))
+            sleep 5
+          done
+          echo "✅ Zookeeper pronto!"
 
-  # ----------------------------------------------------------
-  # 💼 CONTA-SERVICE
-  # Serviço principal da aplicação, que acessa Postgres e Kafka.
-  # ----------------------------------------------------------
-  conta-service:
-    image: conta-service:latest
-    container_name: conta-service
-    ports:
-      - "8081:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-    networks:
-      - microservices-net
-    depends_on:
-      - postgres
-      - kafka-broker
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+          echo "🚀 Subindo Kafka broker..."
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml up -d kafka-broker
 
-  # ----------------------------------------------------------
-  # 📦 KAFKA-SERVICE
-  # Serviço secundário que também se comunica com Kafka e Postgres.
-  # ----------------------------------------------------------
-  kafka-service:
-    image: kafka-service:latest
-    container_name: kafka-service
-    ports:
-      - "8082:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-    networks:
-      - microservices-net
-    depends_on:
-      - postgres
-      - kafka-broker
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+          echo "⏳ Aguardando Kafka Broker (até 90s)..."
+          max_attempts=18
+          attempt=1
+          until docker exec kafka-broker bash -c "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"; do
+            if [ $attempt -ge $max_attempts ]; then
+              echo "❌ Kafka Broker não pronto após $((max_attempts*5))s"
+              docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml logs kafka-broker --tail=200
+              docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+              exit 1
+            fi
+            echo "⏳ Kafka Broker não está pronto... tentativa $attempt/$max_attempts"
+            attempt=$((attempt+1))
+            sleep 5
+          done
+          echo "✅ Kafka Broker pronto!"
 
-# ------------------------------------------------------------
-# 🌐 REDE COMPARTILHADA
-# Todos os containers se comunicam nesta bridge.
-# ------------------------------------------------------------
-networks:
-  microservices-net:
-    driver: bridge
+          echo "🚀 Subindo serviços de aplicação..."
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml up -d conta-service kafka-service
+
+          echo "⏳ Healthchecks dos serviços (até 2 min)..."
+          for svc in conta-service kafka-service; do
+            max_try=24
+            try=1
+            port=8081
+            if [ "$svc" = "kafka-service" ]; then port=8082; fi
+            while ! curl -s -f "http://localhost:${port}/actuator/health" >/dev/null 2>&1; do
+              if [ $try -ge $max_try ]; then
+                echo "❌ $svc healthcheck failed"
+                docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml logs $svc --tail=200
+                docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+                exit 1
+              fi
+              echo "⏳ $svc não está pronto... tentativa $try/$max_try"
+              try=$((try+1))
+              sleep 5
+            done
+            echo "✅ $svc ok"
+          done
+
+          echo "🎉 Integração OK - limpando ambientes..."
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
