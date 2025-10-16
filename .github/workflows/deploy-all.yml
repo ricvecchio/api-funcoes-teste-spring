@@ -3,8 +3,6 @@ name: CI/CD - Microservices Infra
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build-and-deploy:
@@ -29,42 +27,52 @@ jobs:
       - name: 🧩 Instalar dependências auxiliares
         run: sudo apt-get update && sudo apt-get install -y curl netcat-openbsd
 
-      - name: 🐳 Configurar Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 📦 Build das imagens Docker
+      - name: 🐳 Build das imagens Docker
         run: |
           docker build -t conta-service:latest -f conta-service/Dockerfile conta-service
           docker build -t kafka-service:latest -f kafka-service/Dockerfile kafka-service
 
       - name: 🚀 Subir ambiente completo com Docker Compose
         run: |
-          docker compose -f infra/docker-compose.yml --env-file infra/.env up -d --build
+          cd infra
+          docker compose --env-file .env up -d --build
 
       - name: 🕓 Aguardar serviços ficarem saudáveis
         run: |
           echo "⏳ Aguardando containers ficarem saudáveis..."
-          timeout 900 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ]; do echo "⏳ Aguardando conta-service..."; sleep 10; done'
-          timeout 900 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ]; do echo "⏳ Aguardando kafka-service..."; sleep 10; done'
+          timeout 900 bash -c '
+            until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ]; do
+              echo "⏳ Aguardando conta-service..."; sleep 15;
+            done
+            until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ]; do
+              echo "⏳ Aguardando kafka-service..."; sleep 15;
+            done
+          '
           docker compose -f infra/docker-compose.yml ps
 
       - name: 🔍 Testar endpoints dos serviços
         run: |
           echo "✅ Verificando conta-service"
-          timeout 120 bash -c 'until curl -sf http://localhost:8081/actuator/health | grep -q "UP"; do echo "⏳ conta-service iniciando..."; sleep 5; done'
-          echo "✅ conta-service está saudável!"
+          curl -f http://localhost:8081/actuator/health
           echo "✅ Verificando kafka-service"
-          timeout 120 bash -c 'until curl -sf http://localhost:8082/actuator/health | grep -q "UP"; do echo "⏳ kafka-service iniciando..."; sleep 5; done'
-          echo "✅ kafka-service está saudável!"
+          curl -f http://localhost:8082/actuator/health
 
       - name: 🧪 Executar testes automáticos Maven
         run: |
-          echo "🎯 Executando testes no conta-service"
           cd conta-service && mvn test -q
-          cd ../kafka-service && echo "🎯 Executando testes no kafka-service" && mvn test -q
+          cd ../kafka-service && mvn test -q
+
+      - name: 📄 Logs em caso de falha
+        if: failure()
+        run: |
+          echo "⚠️ Logs dos containers:"
+          docker logs conta-service || true
+          docker logs kafka-service || true
+          docker logs postgres-db || true
 
       - name: 🧹 Limpeza final
         if: always()
         run: |
-          docker compose -f infra/docker-compose.yml down -v --remove-orphans
+          cd infra
+          docker compose down -v --remove-orphans
           docker system prune -af
