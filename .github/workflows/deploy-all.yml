@@ -26,11 +26,11 @@ jobs:
           cd conta-service && mvn clean package -DskipTests -q
           cd ../kafka-service && mvn clean package -DskipTests -q
 
-      - name: 🐳 Configurar Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: 🧩 Instalar dependências auxiliares
         run: sudo apt-get update && sudo apt-get install -y curl netcat-openbsd
+
+      - name: 🐳 Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: 📦 Build das imagens Docker
         run: |
@@ -39,14 +39,14 @@ jobs:
 
       - name: 🚀 Subir ambiente completo com Docker Compose
         run: |
-          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml --env-file api-funcoes-teste-spring/infra/.env up -d --build
+          docker compose -f infra/docker-compose.yml --env-file infra/.env up -d --build
 
       - name: 🕓 Aguardar serviços ficarem saudáveis
         run: |
           echo "Aguardando containers ficarem saudáveis..."
           timeout 600 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} zookeeper)" == "healthy" ]; do echo "⏳ Aguardando Zookeeper..."; sleep 10; done'
           timeout 600 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} kafka-broker)" == "healthy" ]; do echo "⏳ Aguardando Kafka..."; sleep 10; done'
-          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml ps
+          docker compose -f infra/docker-compose.yml ps
 
       - name: 🔍 Testar endpoints dos serviços
         run: |
@@ -55,8 +55,14 @@ jobs:
           echo "✅ Verificando kafka-service"
           curl -f http://localhost:8082/actuator/health
 
+      - name: 🧪 Executar testes automáticos Maven
+        run: |
+          echo "🎯 Executando testes no conta-service"
+          cd conta-service && mvn test -q
+          cd ../kafka-service && echo "🎯 Executando testes no kafka-service" && mvn test -q
+
       - name: 🧹 Limpeza final
         if: always()
         run: |
-          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+          docker compose -f infra/docker-compose.yml down -v --remove-orphans
           docker system prune -af
