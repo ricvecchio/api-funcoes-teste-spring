@@ -4,51 +4,62 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+      KAFKA_BROKER: localhost:9092
+
     steps:
-      # Checkout do código
-      - name: Checkout repository
+      # 1. Checkout do código
+      - name: Checkout do repositório
         uses: actions/checkout@v3
 
-      # Criar rede Docker (se já existir, ignora)
-      - name: Criar rede Docker
+      # 2. Configurar Docker e criar rede customizada
+      - name: Configurar rede Docker
         run: |
           echo "=============================="
-          echo "Criando rede Docker..."
+          echo "Criando rede Docker github_network..."
           echo "=============================="
-          docker network create github_network || echo "Rede github_network já existe"
+          docker network create github_network || echo "Rede já existe"
 
-      # Iniciar Postgres
+      # 3. Iniciar Postgres
       - name: Iniciar Postgres
         run: |
           echo "=============================="
           echo "Iniciando Postgres..."
           echo "=============================="
           docker pull postgres:15
-          docker create \
+          docker run -d \
             --name postgres_service \
             --network github_network \
-            -e POSTGRES_USER=admin \
-            -e POSTGRES_PASSWORD=admin \
-            -e POSTGRES_DB=mydb \
+            -e POSTGRES_USER=$POSTGRES_USER \
+            -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+            -e POSTGRES_DB=$POSTGRES_DB \
             -p 5432:5432 \
-            --health-cmd="pg_isready -U admin" \
-            --health-interval=10s \
-            --health-timeout=5s \
-            --health-retries=30 \
             postgres:15
-          docker start postgres_service
-          # Aguardar saúde do Postgres
-          until [ "$(docker inspect --format='{{.State.Health.Status}}' postgres_service)" == "healthy" ]; do
-            echo "Aguardando Postgres ficar saudável..."
+
+          # Retry até Postgres estar pronto
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+          until docker exec postgres_service pg_isready -U $POSTGRES_USER > /dev/null 2>&1; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Erro: Postgres não ficou pronto após $MAX_RETRIES tentativas"
+              docker logs postgres_service
+              exit 1
+            fi
+            echo "Aguardando Postgres ficar pronto... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
             sleep 5
           done
-          echo "Postgres está saudável!"
+          echo "Postgres está pronto!"
 
-      # Iniciar Zookeeper
+      # 4. Iniciar Zookeeper
       - name: Iniciar Zookeeper
         run: |
           echo "=============================="
@@ -62,22 +73,25 @@ jobs:
             -p 2181:2181 \
             -e ZOOKEEPER_CLIENT_PORT=2181 \
             -e ZOOKEEPER_TICK_TIME=2000 \
-            -e GITHUB_ACTIONS=true \
-            -e CI=true \
-            --health-cmd="echo ruok | nc localhost 2181 | grep imok" \
-            --health-interval=10s \
-            --health-timeout=5s \
-            --health-retries=60 \
             confluentinc/cp-zookeeper:7.4.1
           docker start zookeeper_service
-          # Aguardar saúde do Zookeeper
-          until [ "$(docker inspect --format='{{.State.Health.Status}}' zookeeper_service)" == "healthy" ]; do
-            echo "Aguardando Zookeeper ficar saudável..."
+
+          # Retry até Zookeeper responder
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+          until docker exec zookeeper_service /bin/sh -c "echo ruok | nc localhost 2181 | grep imok" > /dev/null 2>&1; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Erro: Zookeeper não ficou pronto após $MAX_RETRIES tentativas"
+              docker logs zookeeper_service
+              exit 1
+            fi
+            echo "Aguardando Zookeeper ficar pronto... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
             sleep 5
           done
-          echo "Zookeeper está saudável!"
+          echo "Zookeeper está pronto!"
 
-      # Iniciar Kafka
+      # 5. Iniciar Kafka
       - name: Iniciar Kafka
         run: |
           echo "=============================="
@@ -87,32 +101,35 @@ jobs:
           docker create \
             --name kafka_service \
             --network github_network \
-            --network-alias kafka \
             -p 9092:9092 \
             -e KAFKA_BROKER_ID=1 \
             -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
-            -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092 \
             -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
             -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-            -e GITHUB_ACTIONS=true \
-            -e CI=true \
-            --health-cmd="nc -z localhost 9092" \
-            --health-interval=10s \
-            --health-timeout=5s \
-            --health-retries=60 \
             confluentinc/cp-kafka:7.4.1
           docker start kafka_service
-          # Aguardar saúde do Kafka
-          until [ "$(docker inspect --format='{{.State.Health.Status}}' kafka_service)" == "healthy" ]; do
-            echo "Aguardando Kafka ficar saudável..."
+
+          # Retry até Kafka estar pronto (porta 9092 aberta)
+          MAX_RETRIES=30
+          RETRY_COUNT=0
+          until nc -z localhost 9092 > /dev/null 2>&1; do
+            RETRY_COUNT=$((RETRY_COUNT+1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "Erro: Kafka não ficou pronto após $MAX_RETRIES tentativas"
+              docker logs kafka_service
+              exit 1
+            fi
+            echo "Aguardando Kafka ficar pronto... (tentativa $RETRY_COUNT/$MAX_RETRIES)"
             sleep 5
           done
-          echo "Kafka está saudável!"
+          echo "Kafka está pronto!"
 
-      # Confirmar deploy completo
-      - name: Deploy concluído
+      # 6. Todos os serviços prontos
+      - name: Todos os serviços prontos
         run: |
           echo "=============================="
-          echo "Todos os serviços estão ativos e saudáveis!"
+          echo "Todos os serviços estão ativos e prontos!"
+          echo "Postgres: localhost:5432"
+          echo "Zookeeper: localhost:2181"
+          echo "Kafka: localhost:9092"
           echo "=============================="
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
