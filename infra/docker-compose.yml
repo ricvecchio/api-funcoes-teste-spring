@@ -15,7 +15,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_NAME}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
 
   # 🐦 Zookeeper (para Kafka)
   zookeeper:
@@ -27,10 +27,11 @@ services:
     ports:
       - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
     healthcheck:
-      test: [ "CMD-SHELL", "echo ruok | nc localhost $${ZOOKEEPER_PORT} | grep imok" ]
+      test: ["CMD-SHELL", "timeout 5 bash -c 'echo ruok | nc localhost $${ZOOKEEPER_PORT} | grep imok'"]
       interval: 10s
+      retries: 20
+      start_period: 20s
       timeout: 5s
-      retries: 12
 
   # 🥨 Kafka broker
   kafka-broker:
