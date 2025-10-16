@@ -27,9 +27,9 @@ services:
     ports:
       - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost $${ZOOKEEPER_PORT}"]
-      interval: 5s
-      timeout: 5s
+      test: [ "CMD-SHELL", "echo ruok | nc localhost $${ZOOKEEPER_PORT} | grep imok" ]
+      interval: 10s
+      timeout: 10s
       retries: 12
 
   # 🥨 Kafka broker
