@@ -26,50 +26,47 @@ services:
       start_period: 5s
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.1
+    image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT:-2181}
       ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
       ZOO_ENABLE_ADMIN: "true"
     ports:
       - "${ZOOKEEPER_PORT:-2181}:2181"
     networks:
       - microservices-net
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | timeout 3 nc localhost ${ZOOKEEPER_PORT:-2181} | grep imok || exit 1"]
+      test: ["CMD", "bash", "-c", "zookeeper-shell localhost:${ZOOKEEPER_PORT:-2181} ls / > /dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 10
       start_period: 20s
 
   kafka-broker:
-    image: confluentinc/cp-kafka:7.6.1
+    image: confluentinc/cp-kafka:7.5.0
     container_name: kafka-broker
-    depends_on:
-      zookeeper:
-        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT:-2181}
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT:-9092},PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_NUM_PARTITIONS: 3
     ports:
       - "${KAFKA_BROKER_PORT:-9092}:9092"
       - "29092:29092"
     networks:
       - microservices-net
+    depends_on:
+      zookeeper:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 kafka-broker-api-versions --bootstrap-server kafka-broker:${KAFKA_BROKER_PORT:-9092} > /dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 10s
+      test: ["CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server localhost:${KAFKA_BROKER_PORT:-9092} > /dev/null 2>&1"]
+      interval: 8s
+      timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 20s
 
   conta-service:
     build:
