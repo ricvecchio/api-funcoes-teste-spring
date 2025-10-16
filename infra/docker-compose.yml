@@ -11,11 +11,6 @@ services:
       - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
 
   # 🐦 Zookeeper (para Kafka)
   zookeeper:
@@ -26,20 +21,13 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo ruok | nc localhost $${ZOOKEEPER_PORT} | grep imok'"]
-      interval: 10s
-      retries: 20
-      start_period: 20s
-      timeout: 5s
 
   # 🥨 Kafka broker
   kafka-broker:
     image: confluentinc/cp-kafka:7.3.0
     container_name: kafka-broker
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
@@ -50,24 +38,25 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     ports:
       - "${KAFKA_BROKER_PORT}:${KAFKA_BROKER_PORT}"
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:$${KAFKA_BROKER_PORT}"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
+    command:
+      - sh
+      - -c
+      - |
+        echo "🕒 Esperando o Zookeeper ficar pronto..."
+        /bin/bash -c 'for i in {1..30}; do nc -z zookeeper ${ZOOKEEPER_PORT} && break; echo "⏳ Tentando conectar ao Zookeeper... ($i/30)"; sleep 3; done'
+        echo "✅ Zookeeper pronto! Iniciando Kafka..."
+        /etc/confluent/docker/run
 
   # 🏦 Conta Service (Spring Boot)
   conta-service:
     build:
-      context: ../conta-service   # caminho ajustado para a pasta do Dockerfile
+      context: ../conta-service
       dockerfile: Dockerfile
     image: conta-service:latest
     container_name: conta-service
     depends_on:
-      postgres-db:
-        condition: service_healthy
-      kafka-broker:
-        condition: service_healthy
+      - postgres-db
+      - kafka-broker
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
@@ -75,11 +64,14 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
     ports:
       - "${CONTA_SERVICE_PORT}:${CONTA_SERVICE_PORT}"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:$${CONTA_SERVICE_PORT}/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
+    command:
+      - sh
+      - -c
+      - |
+        echo "🕒 Esperando o Kafka e o Postgres ficarem prontos..."
+        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências... ($i/30)"; sleep 3; done'
+        echo "✅ Dependências disponíveis! Iniciando aplicação Spring Boot..."
+        java -jar /app/app.jar
 
 volumes:
   postgres_data:
