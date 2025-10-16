@@ -38,7 +38,6 @@ services:
     networks:
       - microservices-net
     healthcheck:
-      # Usar 'ruok' com timeout controlado — mais confiável no Actions
       test: ["CMD-SHELL", "echo ruok | timeout 3 nc localhost ${ZOOKEEPER_PORT:-2181} | grep imok || exit 1"]
       interval: 10s
       timeout: 10s

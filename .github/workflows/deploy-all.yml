@@ -1,193 +1,62 @@
-name: CI/CD Microserviços
+name: CI/CD - Microservices Infra
 
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build-and-test:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout do código
+      - name: 📥 Checkout do repositório
         uses: actions/checkout@v4
 
-      - name: Configurar JDK 21
+      - name: ☕ Configurar JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
-          cache: 'maven'
+          distribution: temurin
+          java-version: 21
+          cache: maven
 
-      - name: Validar estrutura do projeto
-        run: |
-          echo "📁 Estrutura do projeto:"
-          find . -name "pom.xml" -o -name "*.java" | head -20
-          echo ""
-          echo "📦 Módulos encontrados:"
-          ls -la
-
-      - name: Build Projeto Completo
-        run: |
-          echo "🏗️ Build completo..."
-          mvn clean compile -DskipTests
-          echo "✅ Build completo"
-
-      - name: Package dos Serviços
-        run: |
-          echo "📦 Empacotando Conta Service..."
-          cd conta-service
-          mvn clean package -DskipTests
-          echo "✅ Conta Service empacotado"
-          
-          echo "📦 Empacotando Kafka Service..."
-          cd ../kafka-service
-          mvn clean package -DskipTests
-          echo "✅ Kafka Service empacotado"
-
-  docker-integration:
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    steps:
-      - name: Checkout do código
-        uses: actions/checkout@v4
-
-      - name: Configurar JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Rebuild dos serviços
+      - name: 🧱 Build dos serviços
         run: |
           cd conta-service && mvn clean package -DskipTests -q
           cd ../kafka-service && mvn clean package -DskipTests -q
 
-      - name: Configurar Docker Buildx
+      - name: 🐳 Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Instalar dependências
+      - name: 🧩 Instalar dependências auxiliares
         run: sudo apt-get update && sudo apt-get install -y curl netcat-openbsd
 
-      - name: Build das imagens Docker
+      - name: 📦 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f conta-service/Dockerfile ./conta-service
-          docker build -t kafka-service:latest -f kafka-service/Dockerfile ./kafka-service
+          docker build -t conta-service:latest -f conta-service/Dockerfile conta-service
+          docker build -t kafka-service:latest -f kafka-service/Dockerfile kafka-service
 
-      - name: Criar docker-compose-ci.yml
+      - name: 🚀 Subir ambiente completo com Docker Compose
         run: |
-          cat > docker-compose-ci.yml << 'DOCKERCOMPOSE'
-          version: '3.9'
-          services:
-            postgres:
-              image: postgres:15-alpine
-              environment:
-                POSTGRES_DB: conta_db
-                POSTGRES_USER: postgres
-                POSTGRES_PASSWORD: password
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres -d conta_db"]
-                interval: 5s
-                retries: 5
-              ports:
-                - "5432:5432"
-              networks:
-                - microservices-net
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml --env-file api-funcoes-teste-spring/infra/.env up -d --build
 
-            zookeeper:
-              image: confluentinc/cp-zookeeper:7.5.0
-              environment:
-                ZOOKEEPER_CLIENT_PORT: 2181
-                ZOOKEEPER_TICK_TIME: 2000
-              healthcheck:
-                test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep imok"]
-                interval: 5s
-                retries: 5
-              ports:
-                - "2181:2181"
-              networks:
-                - microservices-net
-
-            kafka-broker:
-              image: confluentinc/cp-kafka:7.5.0
-              environment:
-                KAFKA_BROKER_ID: 1
-                KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-                KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
-                KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-              depends_on:
-                zookeeper:
-                  condition: service_healthy
-              healthcheck:
-                test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server kafka-broker:9092 > /dev/null 2>&1"]
-                interval: 10s
-                retries: 5
-              ports:
-                - "9092:9092"
-              networks:
-                - microservices-net
-
-            conta-service:
-              image: conta-service:latest
-              environment:
-                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-                SPRING_DATASOURCE_USERNAME: postgres
-                SPRING_DATASOURCE_PASSWORD: password
-                SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-              depends_on:
-                postgres:
-                  condition: service_healthy
-                kafka-broker:
-                  condition: service_healthy
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-                interval: 10s
-                retries: 5
-              ports:
-                - "8081:8080"
-              networks:
-                - microservices-net
-
-            kafka-service:
-              image: kafka-service:latest
-              environment:
-                SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/conta_db
-                SPRING_DATASOURCE_USERNAME: postgres
-                SPRING_DATASOURCE_PASSWORD: password
-                SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-              depends_on:
-                postgres:
-                  condition: service_healthy
-                kafka-broker:
-                  condition: service_healthy
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-                interval: 10s
-                retries: 5
-              ports:
-                - "8082:8080"
-              networks:
-                - microservices-net
-
-          networks:
-            microservices-net:
-              driver: bridge
-          DOCKERCOMPOSE
-
-      - name: Executar Docker Compose e Healthcheck
+      - name: 🕓 Aguardar serviços ficarem saudáveis
         run: |
-          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml up -d --build
-          echo "⏳ Aguardando containers ficarem saudáveis..."
+          echo "Aguardando containers ficarem saudáveis..."
+          timeout 600 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} zookeeper)" == "healthy" ]; do echo "⏳ Aguardando Zookeeper..."; sleep 10; done'
+          timeout 600 bash -c 'until [ "$(docker inspect -f {{.State.Health.Status}} kafka-broker)" == "healthy" ]; do echo "⏳ Aguardando Kafka..."; sleep 10; done'
           docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml ps
-          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml wait || docker compose logs
 
-      - name: Testar serviços via Health Endpoint
+      - name: 🔍 Testar endpoints dos serviços
         run: |
-          for svc in conta-service kafka-service; do
-            curl -f http://localhost:$(docker compose -f docker-compose-ci.yml port $svc 8080 | cut -d':' -f2)/actuator/health
-          done
+          echo "✅ Verificando conta-service"
+          curl -f http://localhost:8081/actuator/health
+          echo "✅ Verificando kafka-service"
+          curl -f http://localhost:8082/actuator/health
 
-      - name: Limpar Ambiente
+      - name: 🧹 Limpeza final
         if: always()
         run: |
-          docker compose -f docker-compose-ci.yml down -v --remove-orphans
-          docker system prune -f
+          docker compose -f api-funcoes-teste-spring/infra/docker-compose.yml down -v --remove-orphans
+          docker system prune -af
