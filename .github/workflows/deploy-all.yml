@@ -46,7 +46,7 @@ jobs:
         run: |
           echo "⏳ Aguardando serviços dependentes (Postgres, Zookeeper, Kafka Broker)..."
           services=("postgres-db" "zookeeper" "kafka-broker")
-          max_attempts=30
+          max_attempts=40
           sleep_interval=10
 
           for service in "${services[@]}"; do
@@ -79,7 +79,7 @@ jobs:
         run: |
           echo "⏳ Aguardando microservices (Conta Service e Kafka Service) com logs detalhados..."
           services=("conta-service" "kafka-service")
-          max_attempts=40
+          max_attempts=50
           sleep_interval=15
 
           for service in "${services[@]}"; do
@@ -118,9 +118,14 @@ jobs:
           docker compose ps
 
       - name: 🔍 Testar endpoints
+        env:
+          CONTA_SERVICE_PORT: 8081
+          KAFKA_SERVICE_PORT: 8082
         run: |
-          curl -f http://localhost:${CONTA_SERVICE_PORT}/actuator/health
-          curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
+          echo "🧪 Testando health checks dos serviços..."
+          curl -f --retry 5 --retry-delay 10 --retry-max-time 60 http://localhost:${CONTA_SERVICE_PORT}/actuator/health
+          curl -f --retry 5 --retry-delay 10 --retry-max-time 60 http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
+          echo "✅ Todos os health checks passaram!"
 
       - name: 🧪 Executar testes Maven
         run: |
