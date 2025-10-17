@@ -37,25 +37,71 @@ jobs:
           docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
           docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
 
-      - name: 🚀 Subir ambiente Docker Compose
+      - name: 🚀 Subir ambiente Docker Compose (dependências)
         run: |
           cd ${INFRA_PATH}
-          docker compose --env-file .env up -d --build
+          docker compose --env-file .env up -d --build postgres-db zookeeper kafka-broker
 
-      - name: 🕓 Aguardar containers ficarem saudáveis
+      - name: 🕓 Aguardar dependências ficarem saudáveis
         run: |
-          echo "⏳ Aguardando containers ficarem saudáveis..."
-          timeout 900 bash -c '
-            until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ]; do
-              echo "⏳ Aguardando conta-service..."; sleep 15;
-            done
-            echo "✅ conta-service saudável!"
+          echo "⏳ Aguardando serviços dependentes (Postgres, Zookeeper, Kafka Broker)..."
+          services=("postgres-db" "zookeeper" "kafka-broker")
+          max_attempts=30
+          sleep_interval=10
 
-            until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ]; do
-              echo "⏳ Aguardando kafka-service..."; sleep 15;
-            done
-            echo "✅ kafka-service saudável!"
-          '
+          for service in "${services[@]}"; do
+            (
+              attempt=1
+              while [ $attempt -le $max_attempts ]; do
+                status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
+                echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
+                if [ "$status" == "healthy" ]; then
+                  echo "✅ $service saudável!"
+                  exit 0
+                fi
+                sleep $sleep_interval
+                attempt=$((attempt + 1))
+              done
+              echo "❌ $service não ficou saudável após $max_attempts tentativas."
+              exit 1
+            ) &
+          done
+
+          wait
+          echo "✅ Todos os serviços dependentes estão saudáveis!"
+
+      - name: 🚀 Subir microservices
+        run: |
+          cd ${INFRA_PATH}
+          docker compose --env-file .env up -d --build conta-service kafka-service
+
+      - name: 🕓 Aguardar microservices ficarem saudáveis (paralelo)
+        run: |
+          echo "⏳ Aguardando microservices (Conta Service e Kafka Service)..."
+          services=("conta-service" "kafka-service")
+          max_attempts=30
+          sleep_interval=10
+
+          for service in "${services[@]}"; do
+            (
+              attempt=1
+              while [ $attempt -le $max_attempts ]; do
+                status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
+                echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
+                if [ "$status" == "healthy" ]; then
+                  echo "✅ $service saudável!"
+                  exit 0
+                fi
+                sleep $sleep_interval
+                attempt=$((attempt + 1))
+              done
+              echo "❌ $service não ficou saudável após $max_attempts tentativas."
+              exit 1
+            ) &
+          done
+
+          wait
+          echo "✅ Todos os microservices estão saudáveis!"
           docker compose ps
 
       - name: 🔍 Testar endpoints
