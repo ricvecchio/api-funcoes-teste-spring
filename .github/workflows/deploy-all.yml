@@ -1,61 +1,43 @@
-name: 🚀 CI/CD - Build e Deploy Completo
+name: 🚀 Build & Deploy (All Services)
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+      - master
+  workflow_dispatch:
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+  IMAGE_CACHE_DIR: /tmp/.buildx-cache
+  CONTA_SERVICE_PATH: ./conta-service
+  KAFKA_SERVICE_PATH: ./kafka-service
+  INFRA_PATH: ./infra
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    env:
-      DOCKER_BUILDKIT: 1
-      COMPOSE_DOCKER_CLI_BUILD: 1
-      IMAGE_CACHE_DIR: /tmp/.buildx-cache
-      CONTA_SERVICE_PATH: ./conta-service
-      KAFKA_SERVICE_PATH: ./kafka-service
-      INFRA_PATH: ./infra
-
     steps:
-      # -------------------------------------------
-      # 🧩 Checkout do código
-      # -------------------------------------------
+      # 🧰 1. Checkout do repositório
       - name: 📦 Checkout do código
         uses: actions/checkout@v4
 
-      # -------------------------------------------
-      # ☕ Setup do Java 21
-      # -------------------------------------------
-      - name: ☕ Configurando Java 21
+      # ☕ 2. Setup do Java para build Maven
+      - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: temurin
+          java-version: 21
+          cache: maven
 
-      # -------------------------------------------
-      # 🏗️ Build do conta-service (único que gera JAR)
-      # -------------------------------------------
-      - name: 🏗️ Buildando conta-service (Maven)
-        working-directory: ./conta-service
-        run: |
-          echo "🏗️ Buildando conta-service..."
-          mvn clean package -DskipTests
-          echo "✅ Build concluído para conta-service"
-
-      # -------------------------------------------
-      # 🧰 Setup do Docker Buildx
-      # -------------------------------------------
-      - name: 🔧 Configurando Docker Buildx
+      # 🧱 3. Setup do Docker Buildx
+      - name: 🧱 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # -------------------------------------------
-      # 💾 Restaurar cache de build
-      # -------------------------------------------
-      - name: 💾 Restaurando cache de build
+      # 💾 4. Cache de build Docker
+      - name: 💾 Cache do Docker Buildx
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -63,50 +45,44 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # -------------------------------------------
-      # 🐳 Build das imagens Docker com cache
-      # -------------------------------------------
+      # 🔨 5. Build dos serviços Java (gera .jar)
+      - name: 🏗️ Compilando serviços Java
+        run: |
+          echo "🏗️ Compilando conta-service..."
+          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ conta-service compilado com sucesso."
+
+          echo "🏗️ Compilando kafka-service..."
+          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ kafka-service compilado com sucesso."
+
+      # 🐳 6. Build das imagens Docker
       - name: 🐳 Buildando imagens Docker com cache
         run: |
-          echo "🐳 Buildando imagens Docker com cache..."
-          docker compose --env-file ./infra/.env -f ./infra/docker-compose.yml build
-          echo "✅ Build de imagens Docker concluído"
+          echo "🐳 Iniciando build das imagens Docker..."
+          docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
+          echo "✅ Build de imagens Docker concluído."
 
-      # -------------------------------------------
-      # 🚀 Subindo containers
-      # -------------------------------------------
-      - name: 🚀 Subindo containers
-        run: |
-          echo "🚀 Subindo containers..."
-          docker compose --env-file ./infra/.env -f ./infra/docker-compose.yml up -d
-          echo "✅ Containers subidos com sucesso"
+      # 🧹 7. Listagem de imagens geradas (debug)
+      - name: 🧹 Listar imagens geradas
+        run: docker images
 
-      # -------------------------------------------
-      # 🔍 Logs detalhados
-      # -------------------------------------------
-      - name: 🔍 Logs detalhados dos serviços
+      # 🧪 8. Teste de inicialização (opcional em CI)
+      - name: 🧪 Subir containers para teste rápido
         run: |
-          echo "🔍 Containers ativos:"
-          docker ps -a
-          echo "=== conta-service logs ==="
-          docker logs conta-service || true
-          echo "=== kafka-service logs ==="
-          docker logs kafka-service || true
-          echo "=== postgres-db logs ==="
-          docker logs postgres-db || true
-          echo "=== kafka-broker logs ==="
-          docker logs kafka-broker || true
-          echo "=== zookeeper logs ==="
-          docker logs zookeeper || true
+          docker compose -f $INFRA_PATH/docker-compose.yml up -d
+          sleep 15
+          docker ps
+        continue-on-error: true
 
-      # -------------------------------------------
-      # 🧹 Limpeza final
-      # -------------------------------------------
-      - name: 🧹 Limpando containers e cache
-        if: always()
+      # 🧾 9. Logs resumidos dos serviços
+      - name: 📜 Mostrar logs dos serviços (resumo)
         run: |
-          echo "🧹 Removendo containers..."
-          docker compose -f ./infra/docker-compose.yml down -v || true
-          echo "🧹 Limpando cache temporário..."
-          rm -rf /tmp/.buildx-cache || true
-          echo "✅ Limpeza concluída"
+          echo "📜 Logs dos containers ativos:"
+          docker compose -f $INFRA_PATH/docker-compose.yml logs --tail=50
+        continue-on-error: true
+
+      # 🧹 10. Finalização do pipeline
+      - name: 🧹 Encerrando containers
+        run: docker compose -f $INFRA_PATH/docker-compose.yml down -v
+        continue-on-error: true

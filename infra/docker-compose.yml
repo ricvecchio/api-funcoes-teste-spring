@@ -1,78 +1,67 @@
-version: "3.9"
-
 services:
-  postgres-db:
-    image: postgres:15
-    container_name: postgres-db
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "${DB_PORT}:5432"
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${DB_USER}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.0
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
-      ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
-    ports:
-      - "${ZOOKEEPER_PORT}:2181"
-    # Workaround CI GH Actions
-    command: ["sh", "-c", "sleep 5 && /etc/confluent/docker/run"]
-
-  kafka-broker:
-    image: confluentinc/cp-kafka:7.3.0
-    container_name: kafka-broker
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:${KAFKA_BROKER_PORT}
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT}
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "${KAFKA_BROKER_PORT}:9092"
-
   conta-service:
+    container_name: conta-service
     build:
       context: ../conta-service
       dockerfile: Dockerfile
-      cache_from:
-        - type=local,src=/tmp/.buildx-cache
-      target: "" # não usar stage inexistente
-    container_name: conta-service
+    image: conta-service:latest
     ports:
-      - "${CONTA_SERVICE_PORT}:8081"
-    depends_on:
-      - postgres-db
-      - kafka-broker
+      - "8081:8080"
     environment:
-      DB_URL: ${DB_URL}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    depends_on:
+      - kafka-service
+      - postgres
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   kafka-service:
+    container_name: kafka-service
     build:
       context: ../kafka-service
       dockerfile: Dockerfile
-      cache_from:
-        - type=local,src=/tmp/.buildx-cache
-      target: "" # não usar stage inexistente
-    container_name: kafka-service
+    image: kafka-service:latest
     ports:
-      - "${KAFKA_SERVICE_PORT}:8082"
-    depends_on:
-      - kafka-broker
+      - "8082:8080"
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    depends_on:
+      - postgres
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:16
+    container_name: postgres-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: contas_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
