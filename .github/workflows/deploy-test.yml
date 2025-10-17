@@ -3,13 +3,8 @@ name: 🚀 CI/CD - Build & Test (Microservices Infra)
 on:
   push:
     branches:
-      - develop
+      - develop  # automático apenas na develop
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Ambiente de destino"
-        required: true
-        default: "local"
 
 env:
   DOCKER_BUILDKIT: 1
@@ -25,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 🧰 1. Checkout do repositório
+      # 🧰 1. Checkout do código
       - name: 📦 Checkout do código
         uses: actions/checkout@v4
 
@@ -53,41 +48,26 @@ jobs:
       # 🔨 5. Build dos serviços Java (gera .jar)
       - name: 🏗️ Compilando serviços Java
         run: |
-          echo "🏗️ Compilando conta-service..."
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          echo "✅ conta-service compilado com sucesso."
-
-          echo "🏗️ Compilando kafka-service..."
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          echo "✅ kafka-service compilado com sucesso."
 
       # 🐳 6. Build das imagens Docker
-      - name: 🐳 Buildando imagens Docker com cache
-        run: |
-          echo "🐳 Iniciando build das imagens Docker..."
-          docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml build --progress=plain
-          echo "✅ Build de imagens Docker concluído."
+      - name: 🐳 Buildando imagens Docker
+        run: docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
       # 🧹 7. Listagem de imagens geradas (debug)
-      - name: 🧹 Listar imagens geradas
+      - name: 🧹 Listar imagens
         run: docker images
 
-      # 🧪 8. Teste de inicialização (opcional em CI)
-      - name: 🧪 Subir containers para teste rápido
-        run: |
-          docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml up -d
-          sleep 15
-          docker ps
-        continue-on-error: true
-
-      # 🧾 9. Logs resumidos dos serviços
-      - name: 📜 Mostrar logs dos serviços (resumo)
-        run: |
-          echo "📜 Logs dos containers ativos:"
-          docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml logs --tail=50
-        continue-on-error: true
-
-      # 🧹 10. Finalização do pipeline
-      - name: 🧹 Encerrando containers
-        run: docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml down -v
-        continue-on-error: true
+      # 🐘 8. Deploy automático em desenvolvimento (VPS)
+      - name: 🚀 Deploy automático para develop na VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            ENV_FILE=.env
+            cd ~/api-funcoes-teste-spring
+            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml down -v || true
+            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml up -d --build
