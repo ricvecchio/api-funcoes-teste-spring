@@ -1,4 +1,4 @@
-name: Deploy All Services (CI)
+name: Deploy All Services (CI com cache de imagens Docker)
 
 on:
   push:
@@ -16,6 +16,7 @@ jobs:
       INFRA_PATH: ./infra
       DOCKER_BUILDKIT: 1
       COMPOSE_DOCKER_CLI_BUILD: 1
+      IMAGE_CACHE_DIR: /tmp/.buildx-cache
 
     steps:
       # ======================================
@@ -25,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ======================================
-      # 2️⃣ Configurar Java para builds dos serviços Spring Boot
+      # 2️⃣ Configurar Java (para builds Maven)
       # ======================================
       - name: Configurar Java 21
         uses: actions/setup-java@v4
@@ -35,48 +36,66 @@ jobs:
           cache: maven
 
       # ======================================
-      # 3️⃣ Build do conta-service (Spring Boot)
+      # 3️⃣ Restaurar cache de imagens Docker
       # ======================================
-      - name: Build do conta-service
+      - name: Restaurar cache de imagens Docker
+        id: docker-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.IMAGE_CACHE_DIR }}
+          key: ${{ runner.os }}-docker-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      # ======================================
+      # 4️⃣ Build dos microserviços (Spring Boot)
+      # ======================================
+      - name: Build conta-service
         working-directory: ${{ env.CONTA_SERVICE_PATH }}
         run: |
           echo "🏗️  Buildando conta-service..."
-          ./mvnw clean package -DskipTests
+          mvn clean package -DskipTests
           echo "✅ Build concluído para conta-service"
 
-      # ======================================
-      # 4️⃣ Build do kafka-service (Spring Boot)
-      # ======================================
-      - name: Build do kafka-service
+      - name: Build kafka-service
         working-directory: ${{ env.KAFKA_SERVICE_PATH }}
         run: |
           echo "🏗️  Buildando kafka-service..."
-          ./mvnw clean package -DskipTests
+          mvn clean package -DskipTests
           echo "✅ Build concluído para kafka-service"
 
       # ======================================
-      # 5️⃣ Configurar Docker e Docker Compose
+      # 5️⃣ Configurar Docker Buildx (necessário p/ cache)
       # ======================================
-      - name: Configurar Docker Compose
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ======================================
+      # 6️⃣ Verificar versões do Docker
+      # ======================================
+      - name: Verificar versões
         run: |
           docker version
           docker compose version
 
       # ======================================
-      # 6️⃣ Subir os containers com variáveis de ambiente do .env
+      # 7️⃣ Subir containers com cache de build
       # ======================================
-      - name: Subir containers (infra + serviços)
+      - name: Subir containers com Docker Compose
         working-directory: ${{ env.INFRA_PATH }}
         run: |
-          echo "🚀 Subindo containers definidos em docker-compose.yml"
-          docker compose --env-file .env up -d --build
+          echo "🚀 Subindo containers com cache de build..."
+          docker compose --env-file .env build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --progress=plain
+          docker compose --env-file .env up -d
           echo "✅ Containers iniciados"
           docker ps -a
 
       # ======================================
-      # 7️⃣ Aguardar serviços estarem prontos
+      # 8️⃣ Aguardar PostgreSQL e Zookeeper ficarem 'healthy'
       # ======================================
-      - name: Aguardar PostgreSQL e Zookeeper ficarem 'healthy'
+      - name: Aguardar serviços essenciais
         run: |
           echo "⏳ Aguardando PostgreSQL e Zookeeper ficarem prontos..."
           for i in {1..30}; do
@@ -91,7 +110,7 @@ jobs:
           done
 
       # ======================================
-      # 8️⃣ Exibir logs detalhados dos serviços
+      # 9️⃣ Exibir logs detalhados dos serviços
       # ======================================
       - name: Exibir logs detalhados
         run: |
@@ -109,12 +128,22 @@ jobs:
           docker logs zookeeper || echo "⚠️ zookeeper não encontrado"
 
       # ======================================
-      # 9️⃣ Encerrar containers após o CI
+      # 🔟 Salvar cache de imagens após build
+      # ======================================
+      - name: Salvar cache de imagens Docker
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.IMAGE_CACHE_DIR }}
+          key: ${{ runner.os }}-docker-${{ github.sha }}
+
+      # ======================================
+      # 1️⃣1️⃣ Encerrar containers após execução
       # ======================================
       - name: Encerrar containers
         if: always()
         working-directory: ${{ env.INFRA_PATH }}
         run: |
-          echo "🧹 Encerrando containers..."
+          echo "🧹 Encerrando containers e limpando volumes..."
           docker compose down -v
           echo "✅ Limpeza concluída."
