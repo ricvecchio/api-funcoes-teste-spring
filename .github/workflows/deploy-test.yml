@@ -3,7 +3,7 @@ name: 🚀 CI/CD - Build & Test (Microservices Infra)
 on:
   push:
     branches:
-      - develop  # automático apenas na develop
+      - develop
   workflow_dispatch:
 
 env:
@@ -13,7 +13,7 @@ env:
   CONTA_SERVICE_PATH: ./conta-service
   KAFKA_SERVICE_PATH: ./kafka-service
   INFRA_PATH: ./infra
-  ENV_FILE: ${{ github.workspace }}/infra/.env
+  ENV_FILE_DEV: ${{ github.workspace }}/infra/.env
 
 jobs:
   build-and-deploy:
@@ -41,25 +41,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: 🏗️ Compilando serviços Java
+      - name: 🏗️ Compilar serviços Java
         run: |
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
 
       - name: 🐳 Build Docker imagens
-        run: docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml build --progress=plain
+        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
       - name: 🧹 Listar imagens
         run: docker images
 
-      - name: 🚀 Deploy automático para develop na VPS
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            ENV_FILE=.env
-            cd ~/api-funcoes-teste-spring
-            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml down -v || true
-            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml up -d --build
+      - name: 🧪 Subir containers para teste rápido
+        run: |
+          docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml up -d
+          sleep 15
+          docker ps
+        continue-on-error: true
+
+      - name: 📜 Mostrar logs resumidos
+        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml logs --tail=50
+        continue-on-error: true
+
+      - name: 🧹 Encerrando containers
+        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml down -v
+        continue-on-error: true
