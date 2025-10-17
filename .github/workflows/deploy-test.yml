@@ -43,19 +43,12 @@ jobs:
 
       - name: 🏗️ Compilando serviços Java
         run: |
-          echo "🏗️ Compilando conta-service..."
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          echo "✅ conta-service compilado com sucesso."
-
-          echo "🏗️ Compilando kafka-service..."
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          echo "✅ kafka-service compilado com sucesso."
 
       - name: 🐳 Build imagens Docker
         run: |
-          echo "🐳 Iniciando build..."
           docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
-          echo "✅ Build concluído."
 
       - name: 🧹 Listar imagens geradas
         run: docker images
