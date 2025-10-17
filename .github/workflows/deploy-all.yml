@@ -75,27 +75,35 @@ jobs:
           cd ${INFRA_PATH}
           docker compose --env-file .env up -d --build conta-service kafka-service
 
-      - name: 🕓 Aguardar microservices ficarem saudáveis (paralelo)
+      - name: 🕓 Aguardar microservices ficarem saudáveis (com logs detalhados)
         run: |
-          echo "⏳ Aguardando microservices (Conta Service e Kafka Service)..."
+          echo "⏳ Aguardando microservices (Conta Service e Kafka Service) com logs detalhados..."
           services=("conta-service" "kafka-service")
           max_attempts=30
           sleep_interval=10
 
           for service in "${services[@]}"; do
             (
+              echo "🔹 Exibindo logs de $service em background..."
+              docker logs -f $service &
+              logs_pid=$!
+
               attempt=1
               while [ $attempt -le $max_attempts ]; do
+                # Healthcheck usando a porta interna do container (8080)
                 status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
                 echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
                 if [ "$status" == "healthy" ]; then
                   echo "✅ $service saudável!"
+                  kill $logs_pid || true
                   exit 0
                 fi
                 sleep $sleep_interval
                 attempt=$((attempt + 1))
               done
+
               echo "❌ $service não ficou saudável após $max_attempts tentativas."
+              kill $logs_pid || true
               exit 1
             ) &
           done
