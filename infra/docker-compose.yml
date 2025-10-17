@@ -1,17 +1,6 @@
 version: "3.9"
 
-# ======================================
-# 🧱 INFRAESTRUTURA DO PROJETO
-# ======================================
-# Este compose gerencia todos os serviços:
-# - conta-service (backend principal)
-# - kafka-service (comunicação assíncrona)
-# - postgres-db (banco de dados relacional)
-# O ambiente (dev/prod) é definido via .env ou .env.override
-# ======================================
-
 services:
-  # 📦 CONTA SERVICE
   conta-service:
     container_name: conta-service
     build:
@@ -38,7 +27,6 @@ services:
     networks:
       - backend
 
-  # ⚙️ KAFKA SERVICE
   kafka-service:
     container_name: kafka-service
     build:
@@ -64,7 +52,6 @@ services:
     networks:
       - backend
 
-  # 🐘 POSTGRES DATABASE
   postgres:
     image: postgres:16
     container_name: postgres-db
@@ -82,19 +69,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - backend
 
-# 🗄️ VOLUMES
 volumes:
   pgdata:
 
-# 🌐 NETWORKS
 networks:
   backend:
     driver: bridge

@@ -1,10 +1,6 @@
-name: 🚀 CI/CD - Build & Deploy (Ambiente VPS Hostinger)
+name: 🚀 CI/CD - Build & Deploy (VPS Hostinger)
 
 on:
-  push:
-    branches:
-      - develop
-      - main
   workflow_dispatch:
     inputs:
       environment:
@@ -19,17 +15,17 @@ env:
   CONTA_SERVICE_PATH: ./conta-service
   KAFKA_SERVICE_PATH: ./kafka-service
   INFRA_PATH: ./infra
+  ENV_FILE_DEV: ${{ github.workspace }}/infra/.env
+  ENV_FILE_PROD: ${{ github.workspace }}/infra/.env.prod
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 🧰 1. Checkout do repositório
-      - name: 📦 Checkout do código
+      - name: 📦 Checkout
         uses: actions/checkout@v4
 
-      # ☕ 2. Setup Java 21
       - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -37,12 +33,10 @@ jobs:
           java-version: 21
           cache: maven
 
-      # 🧱 3. Setup Docker Buildx
       - name: 🧱 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 💾 4. Cache Docker layers
-      - name: 💾 Cache do Docker Buildx
+      - name: 💾 Cache Docker
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -50,36 +44,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # 🔨 5. Build dos serviços Java
-      - name: 🏗️ Compilando serviços Java
+      - name: 🔨 Compilando serviços Java
         run: |
-          echo "🏗️ Compilando conta-service..."
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          echo "✅ conta-service compilado com sucesso."
-
-          echo "🏗️ Compilando kafka-service..."
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          echo "✅ kafka-service compilado com sucesso."
 
-      # 🐳 6. Build das imagens Docker
-      - name: 🐳 Buildando imagens Docker com cache
+      - name: 🐳 Build Docker
         run: |
-          echo "🐳 Iniciando build das imagens Docker..."
-          docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
-          echo "✅ Build de imagens Docker concluído."
+          if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+            ENV_FILE=$ENV_FILE_PROD
+          else
+            ENV_FILE=$ENV_FILE_DEV
+          fi
+          docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
-      # 🧹 7. Listar imagens geradas (debug)
-      - name: 🧹 Listar imagens geradas
-        run: docker images
-
-      # 📦 8. Compactar arquivos para deploy
-      - name: 📦 Compactando artefatos para deploy
+      - name: 📦 Compactar deploy
         run: |
-          tar -czf deploy-package.tar.gz $INFRA_PATH $CONTA_SERVICE_PATH/target/*.jar $KAFKA_SERVICE_PATH/target/*.jar docker-compose.yml || true
-          ls -lh deploy-package.tar.gz
+          tar -czf deploy-package.tar.gz $INFRA_PATH $CONTA_SERVICE_PATH/target/*.jar $KAFKA_SERVICE_PATH/target/*.jar docker-compose.yml
 
-      # 🔑 9. Conectar e enviar arquivos para VPS
-      - name: 🔑 Enviar arquivos para VPS (Hostinger)
+      - name: 🔑 Enviar para VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -88,33 +71,20 @@ jobs:
           source: "deploy-package.tar.gz"
           target: "~/api-funcoes-teste-spring/"
 
-      # 🚀 10. Deploy remoto na VPS
-      - name: 🚀 Executar deploy na VPS (Hostinger)
-        if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'production'
+      - name: 🚀 Deploy VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            echo "🚀 Iniciando deploy na VPS..."
             cd ~/api-funcoes-teste-spring
-
-            # Define ambiente correto
-            if [ "${GITHUB_REF##*/}" == "develop" ]; then
-              export SPRING_PROFILES_ACTIVE=dev
+            if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+              ENV_FILE=.env.prod
             else
-              export SPRING_PROFILES_ACTIVE=prod
+              ENV_FILE=.env
             fi
-
-            echo "📦 Extraindo novo pacote..."
             tar -xzf deploy-package.tar.gz
             rm deploy-package.tar.gz
-
-            echo "🧹 Encerrando containers antigos..."
-            docker compose -f infra/docker-compose.yml down -v || true
-
-            echo "🐳 Subindo containers atualizados..."
-            docker compose -f infra/docker-compose.yml up -d --build
-
-            echo "✅ Deploy concluído com sucesso!"
+            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml down -v || true
+            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml up -d --build
