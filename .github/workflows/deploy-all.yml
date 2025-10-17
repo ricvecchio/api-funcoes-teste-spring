@@ -56,7 +56,7 @@ jobs:
           docker compose --env-file .env up -d --build
 
       # ======================================
-      # Aguardar serviços ficarem saudáveis
+      # Aguardar containers ficarem saudáveis
       # ======================================
       - name: 🕓 Aguardar containers ficarem saudáveis
         run: |
@@ -104,6 +104,8 @@ jobs:
           docker logs conta-service || true
           docker logs kafka-service || true
           docker logs postgres-db || true
+          docker logs kafka-broker || true
+          docker logs zookeeper || true
 
       # ======================================
       # Limpeza final do Docker
