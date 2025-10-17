@@ -1,7 +1,9 @@
-name: 🚀 CI/CD - Build & Deploy (VPS Hostinger)
+name: 🚀 CI/CD - Build & Deploy (Ambiente VPS Hostinger)
 
-# 🔹 Não executa automaticamente, apenas manual
 on:
+  push:
+    branches:
+      - develop
   workflow_dispatch:
     inputs:
       environment:
@@ -24,9 +26,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📦 Checkout
+      # 🧰 1. Checkout do repositório
+      - name: 📦 Checkout do código
         uses: actions/checkout@v4
 
+      # ☕ 2. Setup Java para build Maven
       - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -34,10 +38,12 @@ jobs:
           java-version: 21
           cache: maven
 
+      # 🧱 3. Setup Docker Buildx
       - name: 🧱 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: 💾 Cache Docker
+      # 💾 4. Cache de build Docker
+      - name: 💾 Cache do Docker Buildx
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -45,25 +51,40 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: 🔨 Compilando serviços Java
+      # 🔨 5. Build dos serviços Java
+      - name: 🏗️ Compilando serviços Java
         run: |
+          echo "🏗️ Compilando conta-service..."
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ conta-service compilado com sucesso."
 
-      - name: 🐳 Build Docker
+          echo "🏗️ Compilando kafka-service..."
+          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ kafka-service compilado com sucesso."
+
+      # 🐳 6. Build das imagens Docker
+      - name: 🐳 Buildando imagens Docker
         run: |
-          if [ "${{ github.event.inputs.environment }}" == "production" ]; then
-            ENV_FILE=$ENV_FILE_PROD
-          else
+          if [ "${GITHUB_REF##*/}" == "develop" ]; then
             ENV_FILE=$ENV_FILE_DEV
+          else
+            ENV_FILE=$ENV_FILE_PROD
           fi
+          echo "🐳 Build Docker com $ENV_FILE"
           docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
-      - name: 📦 Compactar deploy
+      # 🧹 7. Listar imagens geradas (debug)
+      - name: 🧹 Listar imagens
+        run: docker images
+
+      # 📦 8. Compactar arquivos de deploy
+      - name: 📦 Compactando artefatos para deploy
         run: |
           tar -czf deploy-package.tar.gz $INFRA_PATH $CONTA_SERVICE_PATH/target/*.jar $KAFKA_SERVICE_PATH/target/*.jar docker-compose.yml
+          ls -lh deploy-package.tar.gz
 
-      - name: 🔑 Enviar para VPS
+      # 🔑 9. Enviar arquivos para VPS
+      - name: 🔑 Enviar arquivos para VPS (Hostinger)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -72,20 +93,28 @@ jobs:
           source: "deploy-package.tar.gz"
           target: "~/api-funcoes-teste-spring/"
 
-      - name: 🚀 Deploy VPS
+      # 🚀 10. Deploy remoto na VPS
+      - name: 🚀 Executar deploy na VPS (Hostinger)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            echo "🚀 Iniciando deploy na VPS..."
             cd ~/api-funcoes-teste-spring
-            if [ "${{ github.event.inputs.environment }}" == "production" ]; then
-              ENV_FILE=.env.prod
-            else
+
+            # Escolha de ambiente
+            if [ "${GITHUB_REF##*/}" == "develop" ]; then
               ENV_FILE=.env
+            else
+              ENV_FILE=.env.prod
             fi
-            tar -xzf deploy-package.tar.gz
-            rm deploy-package.tar.gz
+
+            echo "🧹 Encerrando containers antigos..."
             docker compose --env-file $ENV_FILE -f infra/docker-compose.yml down -v || true
+
+            echo "🐳 Subindo containers atualizados..."
             docker compose --env-file $ENV_FILE -f infra/docker-compose.yml up -d --build
+
+            echo "✅ Deploy concluído com sucesso!"

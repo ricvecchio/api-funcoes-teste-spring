@@ -1,6 +1,16 @@
-version: "3.9"
+# ======================================
+# 🧱 INFRAESTRUTURA DO PROJETO
+# ======================================
+# Serviços:
+# - conta-service (API principal)
+# - kafka-service (mensageria)
+# - postgres-db (banco)
+# ======================================
 
 services:
+  # ======================================
+  # 📦 CONTA SERVICE - API principal Spring Boot
+  # ======================================
   conta-service:
     container_name: conta-service
     build:
@@ -11,7 +21,7 @@ services:
       - "${CONTA_SERVICE_PORT:-8081}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: ${JAVA_OPTS:-"-Xms256m -Xmx512m"}
+      JAVA_OPTS: "-Xms256m -Xmx512m"
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -27,6 +37,9 @@ services:
     networks:
       - backend
 
+  # ======================================
+  # ⚙️ KAFKA SERVICE - mensageria
+  # ======================================
   kafka-service:
     container_name: kafka-service
     build:
@@ -37,7 +50,7 @@ services:
       - "${KAFKA_SERVICE_PORT:-8082}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: ${JAVA_OPTS:-"-Xms256m -Xmx512m"}
+      JAVA_OPTS: "-Xms256m -Xmx512m"
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -52,6 +65,9 @@ services:
     networks:
       - backend
 
+  # ======================================
+  # 🐘 POSTGRES DATABASE
+  # ======================================
   postgres:
     image: postgres:16
     container_name: postgres-db
@@ -69,12 +85,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - backend
 
+# ======================================
+# 🗄️ VOLUMES
+# ======================================
 volumes:
   pgdata:
 
+# ======================================
+# 🌐 NETWORKS
+# ======================================
 networks:
   backend:
     driver: bridge
