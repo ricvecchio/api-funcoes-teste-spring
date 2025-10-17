@@ -22,11 +22,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 🧰 1. Checkout
-      - name: 📦 Checkout do código
+      - name: 📦 Checkout
         uses: actions/checkout@v4
 
-      # ☕ 2. Setup Java
       - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -34,20 +32,17 @@ jobs:
           java-version: 21
           cache: maven
 
-      # 🐳 3. Build Docker
       - name: 🐳 Build Docker imagens
         run: |
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
           docker compose --env-file $ENV_FILE_PROD -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
-      # 📦 4. Compactar para deploy
       - name: 📦 Compactar artefatos
         run: |
           tar -czf deploy-package.tar.gz $INFRA_PATH $CONTA_SERVICE_PATH/target/*.jar $KAFKA_SERVICE_PATH/target/*.jar docker-compose.yml
           ls -lh deploy-package.tar.gz
 
-      # 🔑 5. Enviar para VPS
       - name: 🔑 Enviar arquivos para VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -57,8 +52,7 @@ jobs:
           source: "deploy-package.tar.gz"
           target: "~/api-funcoes-teste-spring/"
 
-      # 🚀 6. Deploy remoto (manual)
-      - name: 🚀 Executar deploy na VPS
+      - name: 🚀 Deploy remoto (manual)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}

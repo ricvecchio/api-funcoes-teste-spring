@@ -20,11 +20,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 🧰 1. Checkout do código
       - name: 📦 Checkout do código
         uses: actions/checkout@v4
 
-      # ☕ 2. Setup do Java para build Maven
       - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -32,12 +30,10 @@ jobs:
           java-version: 21
           cache: maven
 
-      # 🧱 3. Setup do Docker Buildx
       - name: 🧱 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 💾 4. Cache de build Docker
-      - name: 💾 Cache do Docker Buildx
+      - name: 💾 Cache Docker Buildx
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -45,21 +41,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # 🔨 5. Build dos serviços Java (gera .jar)
       - name: 🏗️ Compilando serviços Java
         run: |
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
 
-      # 🐳 6. Build das imagens Docker
-      - name: 🐳 Buildando imagens Docker
+      - name: 🐳 Build Docker imagens
         run: docker compose --env-file $ENV_FILE -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
-      # 🧹 7. Listagem de imagens geradas (debug)
       - name: 🧹 Listar imagens
         run: docker images
 
-      # 🐘 8. Deploy automático em desenvolvimento (VPS)
       - name: 🚀 Deploy automático para develop na VPS
         uses: appleboy/ssh-action@v1.2.0
         with:

@@ -1,10 +1,13 @@
+version: "3.9"
+
 # ======================================
 # 🧱 INFRAESTRUTURA DO PROJETO
 # ======================================
-# Serviços:
-# - conta-service (API principal)
-# - kafka-service (mensageria)
-# - postgres-db (banco)
+# Este compose gerencia todos os serviços:
+# - conta-service (backend principal)
+# - kafka-service (comunicação assíncrona)
+# - postgres-db (banco de dados relacional)
+# O ambiente (dev/prod) é definido via .env ou .env.prod
 # ======================================
 
 services:
@@ -38,7 +41,7 @@ services:
       - backend
 
   # ======================================
-  # ⚙️ KAFKA SERVICE - mensageria
+  # ⚙️ KAFKA SERVICE - microserviço de mensageria
   # ======================================
   kafka-service:
     container_name: kafka-service
