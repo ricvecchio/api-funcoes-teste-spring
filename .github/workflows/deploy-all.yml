@@ -37,8 +37,8 @@ jobs:
 
       - name: 🐳 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
-          docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
+          docker build -t conta-service:latest -f conta-service/Dockerfile conta-service
+          docker build -t kafka-service:latest -f kafka-service/Dockerfile kafka-service
         env:
           CONTA_SERVICE_PATH: ./conta-service
           KAFKA_SERVICE_PATH: ./kafka-service
