@@ -1,89 +1,91 @@
-name: 🚀 CI/CD - Deploy VPS (Produção / Desenvolvimento)
+name: 🚀 CI/CD - Build & Deploy (VPS Hostinger)
 
 on:
   push:
     branches:
       - develop
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Ambiente de destino (main)"
-        required: true
-        default: "production"
 
 env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
   IMAGE_CACHE_DIR: /tmp/.buildx-cache
-  CONTA_SERVICE_PATH: ./conta-service
-  KAFKA_SERVICE_PATH: ./kafka-service
   INFRA_PATH: ./infra
-  ENV_FILE_DEV: ${{ github.workspace }}/infra/.env
-  ENV_FILE_PROD: ${{ github.workspace }}/infra/.env.prod
+  ENV_FILE_DEV: ./infra/.env
+  ENV_FILE_PROD: ./infra/.env.prod
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📦 Checkout do código
-        uses: actions/checkout@v4
+      # 🧰 Checkout
+      - uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 21
-        uses: actions/setup-java@v4
+      # ☕ Java 21
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
           cache: maven
 
-      - name: 🧱 Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # 🐳 Docker Buildx
+      - uses: docker/setup-buildx-action@v3
 
-      - name: 💾 Cache Docker Buildx
-        uses: actions/cache@v4
+      # 💾 Cache
+      - uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: 🏗️ Compilar serviços Java
+      # 🔨 Build dos serviços Java
+      - name: 🏗️ Compilando serviços Java
         run: |
-          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
-          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          cd ./conta-service && mvn -B clean package -DskipTests && cd ..
+          cd ./kafka-service && mvn -B clean package -DskipTests && cd ..
 
-      - name: 🐳 Build Docker imagens
+      # 🐳 Build imagens Docker
+      - name: 🐳 Build Docker
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/develop" ]; then
-            docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
+          if [ "${GITHUB_REF}" == "refs/heads/develop" ]; then
+            docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build
           else
-            docker compose --env-file $ENV_FILE_PROD -f $INFRA_PATH/docker-compose.yml build --progress=plain
+            docker compose --env-file $ENV_FILE_PROD -f $INFRA_PATH/docker-compose.yml build
           fi
 
-      - name: 🧹 Listar imagens
-        run: docker images
+      # 📦 Compactar artefatos
+      - name: 📦 Package deploy
+        run: tar -czf deploy-package.tar.gz infra conta-service/target/*.jar kafka-service/target/*.jar docker-compose.yml || true
 
-      - name: 🔑 Enviar arquivos para VPS
+      # 🔑 Enviar para VPS (Hostinger)
+      - name: 🔑 SCP para VPS
+        if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "./infra ./conta-service/target/*.jar ./kafka-service/target/*.jar docker-compose.yml"
+          source: "deploy-package.tar.gz"
           target: "~/api-funcoes-teste-spring/"
 
-      - name: 🚀 Deploy na VPS
+      # 🚀 Deploy remoto
+      - name: 🚀 Deploy VPS
+        if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            if [ "${{ github.ref }}" == "refs/heads/develop" ]; then
-              ENV_FILE=.env
-            else
-              ENV_FILE=.env.prod
-            fi
             cd ~/api-funcoes-teste-spring
-            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml down -v || true
-            docker compose --env-file $ENV_FILE -f infra/docker-compose.yml up -d --build
+            tar -xzf deploy-package.tar.gz
+            rm deploy-package.tar.gz
+            docker compose -f infra/docker-compose.yml down -v || true
+            if [ "${GITHUB_REF}" == "refs/heads/develop" ]; then
+              docker compose --env-file infra/.env up -d --build
+            else
+              docker compose --env-file infra/.env.prod up -d --build
+            fi
+            docker ps

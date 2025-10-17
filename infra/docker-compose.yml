@@ -1,13 +1,21 @@
 # ======================================
 # 🧱 INFRAESTRUTURA DO PROJETO
 # ======================================
+# Serviços:
+# - conta-service: API principal
+# - kafka-service: microserviço de mensageria
+# - postgres: banco de dados
+# Use .env ou .env.prod para definir variáveis de ambiente
+# ======================================
 
 services:
-  # 📦 CONTA SERVICE - API principal
+  # ======================================
+  # 📦 CONTA SERVICE - API Spring Boot
+  # ======================================
   conta-service:
     container_name: conta-service
     build:
-      context: ${CONTA_SERVICE_PATH}
+      context: ../conta-service  # Caminho relativo ao docker-compose.yml
       dockerfile: Dockerfile
     image: conta-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -30,11 +38,13 @@ services:
     networks:
       - backend
 
+  # ======================================
   # ⚙️ KAFKA SERVICE
+  # ======================================
   kafka-service:
     container_name: kafka-service
     build:
-      context: ${KAFKA_SERVICE_PATH}
+      context: ../kafka-service  # Caminho relativo ao docker-compose.yml
       dockerfile: Dockerfile
     image: kafka-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -56,7 +66,9 @@ services:
     networks:
       - backend
 
+  # ======================================
   # 🐘 POSTGRES DATABASE
+  # ======================================
   postgres:
     image: postgres:16
     container_name: postgres-db
@@ -82,9 +94,15 @@ services:
     networks:
       - backend
 
+# ======================================
+# 🗄️ VOLUMES
+# ======================================
 volumes:
   pgdata:
 
+# ======================================
+# 🌐 NETWORKS
+# ======================================
 networks:
   backend:
     driver: bridge
