@@ -1,8 +1,23 @@
+version: "3.9"
+
+# ======================================
+# 🧱 INFRAESTRUTURA DO PROJETO
+# ======================================
+# Este compose gerencia todos os serviços:
+# - conta-service (backend principal)
+# - kafka-service (comunicação assíncrona)
+# - postgres-db (banco de dados relacional)
+# O ambiente (dev/prod) é definido via .env
+# ======================================
+
 services:
+  # ======================================
+  # 📦 CONTA SERVICE - API principal Spring Boot
+  # ======================================
   conta-service:
     container_name: conta-service
     build:
-      context: ./../conta-service
+      context: ${CONTA_SERVICE_PATH}
       dockerfile: Dockerfile
     image: conta-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -17,11 +32,21 @@ services:
       - kafka-service
       - postgres
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
 
+  # ======================================
+  # ⚙️ KAFKA SERVICE - microserviço de mensageria
+  # ======================================
   kafka-service:
     container_name: kafka-service
     build:
-      context: ./../kafka-service
+      context: ${KAFKA_SERVICE_PATH}
       dockerfile: Dockerfile
     image: kafka-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -35,7 +60,17 @@ services:
     depends_on:
       - postgres
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
 
+  # ======================================
+  # 🐘 POSTGRES DATABASE
+  # ======================================
   postgres:
     image: postgres:16
     container_name: postgres-db
@@ -48,6 +83,28 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
 
+# ======================================
+# 🗄️ VOLUMES
+# ======================================
 volumes:
   pgdata:
+
+# ======================================
+# 🌐 NETWORKS
+# ======================================
+networks:
+  backend:
+    driver: bridge
