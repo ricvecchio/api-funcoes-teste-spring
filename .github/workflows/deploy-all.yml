@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       # -------------------------------------------
-      # ☕ Setup do Java para builds Maven
+      # ☕ Setup do Java 21
       # -------------------------------------------
       - name: ☕ Configurando Java 21
         uses: actions/setup-java@v4
@@ -37,7 +37,7 @@ jobs:
           java-version: '21'
 
       # -------------------------------------------
-      # 🧱 Build do serviço Java (conta-service)
+      # 🏗️ Build do conta-service (único que gera JAR)
       # -------------------------------------------
       - name: 🏗️ Buildando conta-service (Maven)
         working-directory: ./conta-service
@@ -47,13 +47,13 @@ jobs:
           echo "✅ Build concluído para conta-service"
 
       # -------------------------------------------
-      # 🧰 Setup do Docker Buildx (para cache avançado)
+      # 🧰 Setup do Docker Buildx
       # -------------------------------------------
       - name: 🔧 Configurando Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       # -------------------------------------------
-      # 💾 Configurando cache de build Docker
+      # 💾 Restaurar cache de build
       # -------------------------------------------
       - name: 💾 Restaurando cache de build
         uses: actions/cache@v4
@@ -64,7 +64,7 @@ jobs:
             ${{ runner.os }}-buildx-
 
       # -------------------------------------------
-      # 🐳 Build das imagens Docker
+      # 🐳 Build das imagens Docker com cache
       # -------------------------------------------
       - name: 🐳 Buildando imagens Docker com cache
         run: |
@@ -82,11 +82,11 @@ jobs:
           echo "✅ Containers subidos com sucesso"
 
       # -------------------------------------------
-      # 🔍 Logs detalhados dos containers
+      # 🔍 Logs detalhados
       # -------------------------------------------
       - name: 🔍 Logs detalhados dos serviços
         run: |
-          echo "🔍 Listando containers ativos..."
+          echo "🔍 Containers ativos:"
           docker ps -a
           echo "=== conta-service logs ==="
           docker logs conta-service || true
@@ -100,7 +100,7 @@ jobs:
           docker logs zookeeper || true
 
       # -------------------------------------------
-      # 🧹 Limpeza final (para runners GitHub)
+      # 🧹 Limpeza final
       # -------------------------------------------
       - name: 🧹 Limpando containers e cache
         if: always()
