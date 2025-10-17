@@ -1,15 +1,6 @@
-version: "3.9"
-
 # ======================================
 # 🧱 INFRAESTRUTURA DO PROJETO
 # ======================================
-# Este compose gerencia todos os serviços:
-# - conta-service (backend principal)
-# - kafka-service (comunicação assíncrona)
-# - postgres-db (banco de dados relacional)
-# O ambiente (dev/prod) é definido via .env
-# ======================================
-
 services:
   # ======================================
   # 📦 CONTA SERVICE - API principal Spring Boot
@@ -24,7 +15,7 @@ services:
       - "${CONTA_SERVICE_PORT:-8081}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: "-Xms256m -Xmx512m"
+      JAVA_OPTS: ${JAVA_OPTS}
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -53,7 +44,7 @@ services:
       - "${KAFKA_SERVICE_PORT:-8082}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: "-Xms256m -Xmx512m"
+      JAVA_OPTS: ${JAVA_OPTS}
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}

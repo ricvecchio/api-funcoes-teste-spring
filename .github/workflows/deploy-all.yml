@@ -1,4 +1,4 @@
-name: 🚀 CI/CD - Build & Deploy (Ambiente VPS Hostinger)
+name: 🚀 CI/CD - Build & Deploy (VPS Hostinger / Simulado)
 
 on:
   push:
@@ -15,20 +15,20 @@ env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
   IMAGE_CACHE_DIR: /tmp/.buildx-cache
-  CONTA_SERVICE_PATH: ./conta-service
-  KAFKA_SERVICE_PATH: ./kafka-service
-  INFRA_PATH: ./infra
-  ENV_FILE_DEV: ./infra/.env
-  ENV_FILE_PROD: ./infra/.env.prod
+  INFRA_PATH=${GITHUB_WORKSPACE}/infra
+  ENV_FILE_DEV=${GITHUB_WORKSPACE}/infra/.env
+  ENV_FILE_PROD=${GITHUB_WORKSPACE}/infra/.env.prod
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # 🧰 Checkout
       - name: 📦 Checkout do código
         uses: actions/checkout@v4
 
+      # ☕ Setup Java
       - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -36,10 +36,12 @@ jobs:
           java-version: 21
           cache: maven
 
+      # 🧱 Setup Docker Buildx
       - name: 🧱 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: 💾 Cache do Docker Buildx
+      # 💾 Cache Docker
+      - name: 💾 Cache Docker Buildx
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -47,25 +49,35 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      # 🔨 Build Maven usando working-directory
       - name: 🏗️ Compilando conta-service
         run: mvn -B clean package -DskipTests
-        working-directory: ${{ github.workspace }}/conta-service
+        working-directory: ./conta-service
 
       - name: 🏗️ Compilando kafka-service
         run: mvn -B clean package -DskipTests
-        working-directory: ${{ github.workspace }}/kafka-service
+        working-directory: ./kafka-service
 
-      - name: 🐳 Buildando imagens Docker
-        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
+      # 🐳 Build imagens Docker
+      - name: 🐳 Build das imagens Docker
+        run: |
+          echo "🐳 Iniciando build das imagens Docker..."
+          docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
+          echo "✅ Build concluído."
 
+      # 🧹 Listar imagens
       - name: 🧹 Listar imagens geradas
         run: docker images
 
-      # Simulação de deploy remoto, sem VPS ainda
-      - name: 🔧 Simular deploy remoto
+      # 🔁 Simulação deploy automático para develop
+      - name: 🔄 Simulação deploy para develop
+        if: github.ref == 'refs/heads/develop'
         run: |
-          echo "🚀 Simulando deploy remoto..."
-          echo "📦 Extraindo pacote..."
-          echo "🧹 Encerrando containers antigos..."
-          echo "🐳 Subindo containers atualizados..."
-          echo "✅ Deploy simulado concluído!"
+          echo "🚀 Deploy simulado para DEVELOP..."
+          docker compose -f $INFRA_PATH/docker-compose.yml up -d
+
+      # ✅ Deploy manual para main
+      - name: 🚀 Deploy manual para main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "🚨 Deploy manual para MAIN, precisa aprovar workflow"
