@@ -17,10 +17,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 15s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 20s
 
   # ======================================
   # Zookeeper
@@ -34,11 +34,11 @@ services:
     ports:
       - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "echo stat | nc localhost ${ZOOKEEPER_PORT} | grep Mode"]
+      test: ["CMD-SHELL", "echo ruok | nc 127.0.0.1 ${ZOOKEEPER_PORT} | grep imok || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 12
+      start_period: 40s
 
   # ======================================
   # Kafka Broker
@@ -72,9 +72,8 @@ services:
   # ======================================
   conta-service:
     build:
-      context: ../conta-service
+      context: ${CONTA_SERVICE_PATH}
       dockerfile: Dockerfile
-    image: conta-service:latest
     container_name: conta-service
     depends_on:
       postgres-db:
@@ -82,30 +81,26 @@ services:
       kafka-broker:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: 8080  # Porta interna fixa
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
     ports:
-      - "${CONTA_SERVICE_PORT}:8080" # Porta externa = variável, interna = 8080
+      - "${CONTA_SERVICE_PORT}:8080"
     healthcheck:
-      # Usar health/liveness evita marcar o container como unhealthy apenas por dependências (Kafka/Postgres)
-      # A liveness verifica se o processo está vivo; a readiness (quando usada) deve refletir dependências.
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health/liveness || exit 1"]
-      interval: 20s
-      timeout: 15s
-      retries: 18
-      start_period: 120s
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   # ======================================
   # Kafka Service
   # ======================================
   kafka-service:
     build:
-      context: ../kafka-service
+      context: ${KAFKA_SERVICE_PATH}
       dockerfile: Dockerfile
-    image: kafka-service:latest
     container_name: kafka-service
     depends_on:
       postgres-db:
@@ -113,21 +108,18 @@ services:
       kafka-broker:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: 8080  # Porta interna fixa
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
     ports:
-      - "${KAFKA_SERVICE_PORT}:8080" # Porta externa = variável, interna = 8080
+      - "${KAFKA_SERVICE_PORT}:8080"
     healthcheck:
-      # Preferir liveness para sinalizar que o processo do Spring Boot levantou.
-      # Para readiness (dependências externas) usar /actuator/health/readiness em checks de integração.
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health/liveness || exit 1"]
-      interval: 20s
-      timeout: 15s
-      retries: 18
-      start_period: 120s
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
 volumes:
   postgres_data:
