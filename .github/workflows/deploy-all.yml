@@ -1,5 +1,6 @@
 name: 🚀 CI/CD - Build & Deploy (VPS Hostinger)
 
+# 🔹 Não executa automaticamente, apenas manual
 on:
   workflow_dispatch:
     inputs:
