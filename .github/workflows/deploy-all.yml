@@ -32,7 +32,9 @@ jobs:
           cd ../${KAFKA_SERVICE_PATH} && mvn clean package -DskipTests -q
 
       - name: 🧩 Instalar dependências auxiliares
-        run: sudo apt-get update && sudo apt-get install -y curl netcat
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl netcat-openbsd
 
       - name: 🐳 Build das imagens Docker
         run: |
