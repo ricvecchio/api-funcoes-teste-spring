@@ -47,7 +47,8 @@ services:
     image: confluentinc/cp-kafka:7.3.0
     container_name: kafka-broker
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
@@ -62,7 +63,7 @@ services:
       test: ["CMD", "nc", "-z", "localhost", "${KAFKA_BROKER_PORT}"]
       interval: 15s
       timeout: 10s
-      retries: 10
+      retries: 20
       start_period: 30s
 
   # ======================================
@@ -72,11 +73,15 @@ services:
     build:
       context: ../conta-service
       dockerfile: Dockerfile
+      args:
+        SERVER_PORT: ${CONTA_SERVICE_PORT}
     image: conta-service:latest
     container_name: conta-service
     depends_on:
-      - postgres-db
-      - kafka-broker
+      postgres-db:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
@@ -99,24 +104,28 @@ services:
     build:
       context: ../kafka-service
       dockerfile: Dockerfile
+      args:
+        SERVER_PORT: ${KAFKA_SERVICE_PORT}
     image: kafka-service:latest
     container_name: kafka-service
     depends_on:
-      - postgres-db
-      - kafka-broker
+      postgres-db:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: 8080  # Porta interna do container
+      SERVER_PORT: ${KAFKA_SERVICE_PORT}
     ports:
-      - "${KAFKA_SERVICE_PORT}:8080" # Porta externa = variável, interna = 8080
+      - "${KAFKA_SERVICE_PORT}:${KAFKA_SERVICE_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 10
+      retries: 20
       start_period: 30s
 
 volumes:

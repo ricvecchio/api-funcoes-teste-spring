@@ -12,6 +12,8 @@ jobs:
       CONTA_SERVICE_PATH: ./conta-service
       KAFKA_SERVICE_PATH: ./kafka-service
       INFRA_PATH: ./infra
+      CONTA_SERVICE_PORT: 8081
+      KAFKA_SERVICE_PORT: 8082
 
     steps:
       - name: 📥 Checkout do repositório
@@ -34,8 +36,8 @@ jobs:
 
       - name: 🐳 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
-          docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
+          docker build --build-arg SERVER_PORT=${CONTA_SERVICE_PORT} -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
+          docker build --build-arg SERVER_PORT=${KAFKA_SERVICE_PORT} -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
 
       - name: 🚀 Subir ambiente Docker Compose (dependências)
         run: |
@@ -50,24 +52,22 @@ jobs:
           sleep_interval=10
 
           for service in "${services[@]}"; do
-            (
-              attempt=1
-              while [ $attempt -le $max_attempts ]; do
-                status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
-                echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
-                if [ "$status" == "healthy" ]; then
-                  echo "✅ $service saudável!"
-                  exit 0
-                fi
-                sleep $sleep_interval
-                attempt=$((attempt + 1))
-              done
+            attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
+              echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
+              if [ "$status" == "healthy" ]; then
+                echo "✅ $service saudável!"
+                break
+              fi
+              sleep $sleep_interval
+              attempt=$((attempt + 1))
+            done
+            if [ "$status" != "healthy" ]; then
               echo "❌ $service não ficou saudável após $max_attempts tentativas."
               exit 1
-            ) &
+            fi
           done
-
-          wait
           echo "✅ Todos os serviços dependentes estão saudáveis!"
 
       - name: 🚀 Subir microservices
@@ -75,40 +75,31 @@ jobs:
           cd ${INFRA_PATH}
           docker compose --env-file .env up -d --build conta-service kafka-service
 
-      - name: 🕓 Aguardar microservices ficarem saudáveis (com logs detalhados)
+      - name: 🕓 Aguardar microservices ficarem saudáveis
         run: |
-          echo "⏳ Aguardando microservices (Conta Service e Kafka Service) com logs detalhados..."
+          echo "⏳ Aguardando microservices (Conta Service e Kafka Service)..."
           services=("conta-service" "kafka-service")
           max_attempts=30
           sleep_interval=10
 
           for service in "${services[@]}"; do
-            (
-              echo "🔹 Exibindo logs de $service em background..."
-              docker logs -f $service &
-              logs_pid=$!
-
-              attempt=1
-              while [ $attempt -le $max_attempts ]; do
-                # Healthcheck usando a porta interna do container (8080)
-                status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
-                echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
-                if [ "$status" == "healthy" ]; then
-                  echo "✅ $service saudável!"
-                  kill $logs_pid || true
-                  exit 0
-                fi
-                sleep $sleep_interval
-                attempt=$((attempt + 1))
-              done
-
+            attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
+              echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
+              if [ "$status" == "healthy" ]; then
+                echo "✅ $service saudável!"
+                break
+              fi
+              sleep $sleep_interval
+              attempt=$((attempt + 1))
+            done
+            if [ "$status" != "healthy" ]; then
               echo "❌ $service não ficou saudável após $max_attempts tentativas."
-              kill $logs_pid || true
+              docker logs $service || true
               exit 1
-            ) &
+            fi
           done
-
-          wait
           echo "✅ Todos os microservices estão saudáveis!"
           docker compose ps
 
