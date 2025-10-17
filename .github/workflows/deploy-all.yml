@@ -1,221 +1,54 @@
-name: CI/CD - Microservices Infra 🚀
+name: 🚀 Deploy All Services
 
 on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     env:
-      CONTA_SERVICE_PATH: ./conta-service
-      KAFKA_SERVICE_PATH: ./kafka-service
-      INFRA_PATH: ./infra
       DOCKER_BUILDKIT: 1
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
+      CONTA_SERVICE_PATH: ./conta-service
+      KAFKA_SERVICE_PATH: ./kafka-service
+      INFRA_PATH: ./infra
 
     steps:
-      # ======================================
-      # 📥 Checkout do repositório
-      # ======================================
-      - name: 📥 Checkout do repositório
-        uses: actions/checkout@v4
+      - name: 🔽 Checkout repository
+        uses: actions/checkout@v3
 
-      # ======================================
-      # ☕ Configurar JDK 21
-      # ======================================
-      - name: ☕ Configurar JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          cache: maven
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # ======================================
-      # 💾 Restaurar cache de imagens Docker
-      # ======================================
-      - name: 💾 Restaurar cache de imagens Docker
-        id: docker-cache
-        uses: actions/cache@v4
+      - name: 📦 Cache Docker layers
+        uses: actions/cache@v3
         with:
-          path: ${{ env.IMAGE_CACHE_DIR }}
+          path: /tmp/.buildx-cache
           key: ${{ runner.os }}-docker-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-docker-
 
-      # ======================================
-      # 🏗️ Build dos microserviços
-      # ======================================
-      - name: 🏗️  Buildando conta-service
-        working-directory: ${{ env.CONTA_SERVICE_PATH }}
-        run: |
-          echo "🏗️  Buildando conta-service..."
-          mvn clean package -DskipTests
-          echo "✅ Build concluído para conta-service"
-
-      - name: 🏗️  Buildando kafka-service
-        working-directory: ${{ env.KAFKA_SERVICE_PATH }}
-        run: |
-          echo "🏗️  Buildando kafka-service..."
-          mvn clean package -DskipTests
-          echo "✅ Build concluído para kafka-service"
-
-      # ======================================
-      # 🧩 Configurar Docker Buildx
-      # ======================================
-      - name: 🧩 Configurar Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # ======================================
-      # 🐳 Build das imagens Docker com cache
-      # ======================================
-      - name: 🐳 Build das imagens Docker
-        working-directory: ${{ env.INFRA_PATH }}
+      - name: 🐳 Buildando imagens Docker com cache
         run: |
           echo "🐳 Buildando imagens Docker com cache..."
-          docker compose --env-file .env build \
-            --build-arg BUILDKIT_INLINE_CACHE=1
+          docker compose --env-file .env -f ${{ env.INFRA_PATH }}/docker-compose.yml build
           echo "✅ Build de imagens Docker concluído"
 
-      # ======================================
-      # 🚀 Subir dependências (Postgres, Zookeeper, Kafka Broker)
-      # ======================================
-      - name: 🚀 Subir ambiente Docker Compose (dependências)
-        working-directory: ${{ env.INFRA_PATH }}
+      - name: 🚀 Subindo containers
         run: |
-          docker compose --env-file .env up -d postgres-db zookeeper kafka-broker
+          echo "🚀 Subindo containers..."
+          docker compose --env-file .env -f ${{ env.INFRA_PATH }}/docker-compose.yml up -d
+          echo "✅ Containers rodando"
 
-      # ======================================
-      # 🕓 Aguardar serviços essenciais ficarem saudáveis
-      # ======================================
-      - name: 🕓 Aguardar serviços essenciais
-        run: |
-          echo "⏳ Aguardando serviços dependentes (Postgres, Zookeeper, Kafka Broker)..."
-          services=("postgres-db" "zookeeper" "kafka-broker")
-          max_attempts=40
-          sleep_interval=10
-
-          for service in "${services[@]}"; do
-            (
-              attempt=1
-              while [ $attempt -le $max_attempts ]; do
-                status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
-                echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
-                if [ "$status" == "healthy" ]; then
-                  echo "✅ $service saudável!"
-                  exit 0
-                fi
-                sleep $sleep_interval
-                attempt=$((attempt + 1))
-              done
-              echo "❌ $service não ficou saudável após $max_attempts tentativas."
-              exit 1
-            ) &
-          done
-
-          wait
-          echo "✅ Todos os serviços dependentes estão saudáveis!"
-
-      # ======================================
-      # 🚀 Subir microservices
-      # ======================================
-      - name: 🚀 Subir microservices
-        working-directory: ${{ env.INFRA_PATH }}
-        run: |
-          docker compose --env-file .env up -d conta-service kafka-service
-
-      # ======================================
-      # 🕓 Aguardar microservices ficarem saudáveis (com logs detalhados)
-      # ======================================
-      - name: 🕓 Aguardar microservices
-        run: |
-          echo "⏳ Aguardando microservices (Conta Service e Kafka Service) com logs detalhados..."
-          services=("conta-service" "kafka-service")
-          max_attempts=50
-          sleep_interval=15
-
-          for service in "${services[@]}"; do
-            (
-              echo "🔹 Iniciando monitoramento de $service..."
-              attempt=1
-              while [ $attempt -le $max_attempts ]; do
-                status=$(docker inspect -f '{{.State.Health.Status}}' $service 2>/dev/null || echo "unknown")
-                echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
-          
-                if [ "$status" == "unhealthy" ] && [ $attempt -gt 3 ]; then
-                  echo "🔍 [$service] Logs (últimas 30 linhas):"
-                  docker logs $service --tail 30 2>/dev/null || echo "⚠️ Não foi possível obter logs"
-                fi
-          
-                if [ "$status" == "healthy" ]; then
-                  echo "✅ $service saudável!"
-                  exit 0
-                fi
-          
-                sleep $sleep_interval
-                attempt=$((attempt + 1))
-              done
-
-              echo "❌ $service não ficou saudável após $max_attempts tentativas."
-              echo "🔍 Logs finais de $service:"
-              docker logs $service 2>/dev/null || echo "⚠️ Não foi possível obter logs"
-              exit 1
-            ) &
-          done
-
-          wait
-          echo "✅ Todos os microservices estão saudáveis!"
-          docker compose ps
-
-      # ======================================
-      # 🔍 Testar endpoints
-      # ======================================
-      - name: 🔍 Testar endpoints
-        env:
-          CONTA_SERVICE_PORT: 8081
-          KAFKA_SERVICE_PORT: 8082
-        run: |
-          echo "🧪 Testando health checks dos serviços..."
-          curl -f --retry 5 --retry-delay 10 --retry-max-time 60 http://localhost:${CONTA_SERVICE_PORT}/actuator/health
-          curl -f --retry 5 --retry-delay 10 --retry-max-time 60 http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
-          echo "✅ Todos os health checks passaram!"
-
-      # ======================================
-      # 🧪 Executar testes Maven
-      # ======================================
-      - name: 🧪 Executar testes Maven
-        run: |
-          cd ${{ env.CONTA_SERVICE_PATH }} && mvn test -q
-          cd ../${{ env.KAFKA_SERVICE_PATH }} && mvn test -q
-
-      # ======================================
-      # 📄 Logs em caso de falha
-      # ======================================
-      - name: 📄 Logs em caso de falha
-        if: failure()
+      - name: 🔍 Logs detalhados dos serviços
         run: |
           echo "🔍 Logs detalhados dos serviços:"
           docker ps -a
-          echo "=== conta-service logs ==="
-          docker logs conta-service || true
-          echo "=== kafka-service logs ==="
-          docker logs kafka-service || true
-          echo "=== postgres-db logs ==="
-          docker logs postgres-db || true
-          echo "=== kafka-broker logs ==="
-          docker logs kafka-broker || true
-          echo "=== zookeeper logs ==="
-          docker logs zookeeper || true
-
-      # ======================================
-      # 🧹 Limpeza final
-      # ======================================
-      - name: 🧹 Limpeza final
-        if: always()
-        working-directory: ${{ env.INFRA_PATH }}
-        run: |
-          docker compose down -v --remove-orphans
-          docker system prune -af
+          for svc in conta-service kafka-service postgres-db kafka-broker zookeeper; do
+            echo "=== $svc logs ==="
+            docker logs $svc || true
+          done
