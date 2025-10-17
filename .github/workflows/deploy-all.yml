@@ -49,8 +49,8 @@ jobs:
 
       - name: 🔨 Build Java Services
         run: |
-          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd -
-          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd -
+          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests
+          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests
 
       - name: 🐳 Build Docker Images
         run: |

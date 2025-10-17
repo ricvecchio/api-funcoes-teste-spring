@@ -47,13 +47,13 @@ jobs:
 
       - name: 🔨 Build Java Services
         run: |
-          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd -
-          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd -
+          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests
+          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests
 
       - name: 🐳 Build Docker Images
         run: docker compose --env-file $INFRA_PATH/.env -f $INFRA_PATH/docker-compose.yml build --progress=plain
 
-      - name: 🧪 Test Container Up
+      - name: 🧪 Test Containers
         run: |
           docker compose --env-file $INFRA_PATH/.env -f $INFRA_PATH/docker-compose.yml up -d
           sleep 15

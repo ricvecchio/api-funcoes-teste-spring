@@ -1,20 +1,8 @@
-# ======================================
-# 🧱 INFRAESTRUTURA DO PROJETO
-# ======================================
-# Serviços:
-# - conta-service
-# - kafka-service
-# - postgres
-# ======================================
-
 services:
-  # ======================================
-  # 📦 CONTA SERVICE
-  # ======================================
   conta-service:
     container_name: conta-service
     build:
-      context: ./../conta-service   # ⚠️ Caminho fora de infra, como no deploy original
+      context: ./../conta-service
       dockerfile: Dockerfile
     image: conta-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -29,19 +17,11 @@ services:
       - kafka-service
       - postgres
     restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
-  # ======================================
-  # ⚙️ KAFKA SERVICE
-  # ======================================
   kafka-service:
     container_name: kafka-service
     build:
-      context: ./../kafka-service   # ⚠️ Caminho fora de infra
+      context: ./../kafka-service
       dockerfile: Dockerfile
     image: kafka-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -55,15 +35,7 @@ services:
     depends_on:
       - postgres
     restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
-  # ======================================
-  # 🐘 POSTGRES
-  # ======================================
   postgres:
     image: postgres:16
     container_name: postgres-db
@@ -76,16 +48,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
 volumes:
   pgdata:
