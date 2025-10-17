@@ -12,9 +12,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT}:5432" # Porta externa -> interna
+      - "${DB_PORT}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Persistência dos dados
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${DB_USER}"]
       interval: 10s
@@ -98,11 +98,11 @@ services:
         echo "✅ Dependências disponíveis! Iniciando Conta Service..."
         java -jar /app/app.jar
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health || exit 1"]
       interval: 20s
       timeout: 10s
-      start_period: 60s
-      retries: 5
+      start_period: 180s
+      retries: 20
 
   # ======================================
   # 🔄 Kafka Service (processamento assíncrono)
@@ -132,14 +132,11 @@ services:
         echo "✅ Dependências disponíveis! Iniciando Kafka Service..."
         java -jar /app/app.jar
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health || exit 1"]
       interval: 20s
       timeout: 10s
-      start_period: 60s
-      retries: 5
+      start_period: 180s
+      retries: 20
 
-# ======================================
-# 🔹 Volume persistente para Postgres
-# ======================================
 volumes:
   postgres_data:
