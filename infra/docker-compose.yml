@@ -75,16 +75,18 @@ services:
     image: conta-service:latest
     container_name: conta-service
     depends_on:
-      - postgres-db
-      - kafka-broker
+      postgres-db:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: 8080  # Porta interna fixa
+      SERVER_PORT: 8080
     ports:
-      - "${CONTA_SERVICE_PORT}:8080" # Porta externa = variável, interna = 8080
+      - "${CONTA_SERVICE_PORT}:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
@@ -102,16 +104,18 @@ services:
     image: kafka-service:latest
     container_name: kafka-service
     depends_on:
-      - postgres-db
-      - kafka-broker
+      postgres-db:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: 8080  # Porta interna fixa
+      SERVER_PORT: ${KAFKA_SERVICE_PORT}
     ports:
-      - "${KAFKA_SERVICE_PORT}:8080" # Porta externa = variável, interna = 8080
+      - "${KAFKA_SERVICE_PORT}:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
