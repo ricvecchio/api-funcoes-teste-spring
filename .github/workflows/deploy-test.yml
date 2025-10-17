@@ -1,0 +1,90 @@
+name: 🚀 CI/CD - Build & Test (Microservices Infra)
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: "local"
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+  IMAGE_CACHE_DIR: /tmp/.buildx-cache
+  CONTA_SERVICE_PATH: ./conta-service
+  KAFKA_SERVICE_PATH: ./kafka-service
+  INFRA_PATH: ./infra
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 🧰 1. Checkout do repositório
+      - name: 📦 Checkout do código
+        uses: actions/checkout@v4
+
+      # ☕ 2. Setup do Java para build Maven
+      - name: ☕ Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      # 🧱 3. Setup do Docker Buildx
+      - name: 🧱 Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 💾 4. Cache de build Docker
+      - name: 💾 Cache do Docker Buildx
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      # 🔨 5. Build dos serviços Java (gera .jar)
+      - name: 🏗️ Compilando serviços Java
+        run: |
+          echo "🏗️ Compilando conta-service..."
+          cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ conta-service compilado com sucesso."
+
+          echo "🏗️ Compilando kafka-service..."
+          cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ kafka-service compilado com sucesso."
+
+      # 🐳 6. Build das imagens Docker
+      - name: 🐳 Buildando imagens Docker com cache
+        run: |
+          echo "🐳 Iniciando build das imagens Docker..."
+          docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
+          echo "✅ Build de imagens Docker concluído."
+
+      # 🧹 7. Listagem de imagens geradas (debug)
+      - name: 🧹 Listar imagens geradas
+        run: docker images
+
+      # 🧪 8. Teste de inicialização rápido (smoke test)
+      - name: 🧪 Subir containers para teste rápido
+        run: |
+          docker compose -f $INFRA_PATH/docker-compose.yml up -d
+          sleep 15
+          docker ps
+        continue-on-error: true
+
+      # 🧾 9. Logs resumidos dos serviços
+      - name: 📜 Mostrar logs dos serviços (resumo)
+        run: docker compose -f $INFRA_PATH/docker-compose.yml logs --tail=50
+        continue-on-error: true
+
+      # 🧹 10. Encerramento do pipeline
+      - name: 🧹 Encerrando containers
+        run: docker compose -f $INFRA_PATH/docker-compose.yml down -v
+        continue-on-error: true

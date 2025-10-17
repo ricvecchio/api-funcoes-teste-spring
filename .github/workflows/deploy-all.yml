@@ -1,11 +1,16 @@
-name: 🚀 Build & Deploy (All Services)
+name: 🚀 CI/CD - Build & Deploy (Ambiente VPS Hostinger)
 
 on:
   push:
     branches:
+      - develop
       - main
-      - master
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino (develop/main)"
+        required: true
+        default: "production"
 
 env:
   DOCKER_BUILDKIT: 1
@@ -24,7 +29,7 @@ jobs:
       - name: 📦 Checkout do código
         uses: actions/checkout@v4
 
-      # ☕ 2. Setup do Java para build Maven
+      # ☕ 2. Setup Java 21
       - name: ☕ Setup Java 21
         uses: actions/setup-java@v4
         with:
@@ -32,11 +37,11 @@ jobs:
           java-version: 21
           cache: maven
 
-      # 🧱 3. Setup do Docker Buildx
+      # 🧱 3. Setup Docker Buildx
       - name: 🧱 Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 💾 4. Cache de build Docker
+      # 💾 4. Cache Docker layers
       - name: 💾 Cache do Docker Buildx
         uses: actions/cache@v4
         with:
@@ -45,7 +50,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # 🔨 5. Build dos serviços Java (gera .jar)
+      # 🔨 5. Build dos serviços Java
       - name: 🏗️ Compilando serviços Java
         run: |
           echo "🏗️ Compilando conta-service..."
@@ -63,26 +68,53 @@ jobs:
           docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
           echo "✅ Build de imagens Docker concluído."
 
-      # 🧹 7. Listagem de imagens geradas (debug)
+      # 🧹 7. Listar imagens geradas (debug)
       - name: 🧹 Listar imagens geradas
         run: docker images
 
-      # 🧪 8. Teste de inicialização (opcional em CI)
-      - name: 🧪 Subir containers para teste rápido
+      # 📦 8. Compactar arquivos para deploy
+      - name: 📦 Compactando artefatos para deploy
         run: |
-          docker compose -f $INFRA_PATH/docker-compose.yml up -d
-          sleep 15
-          docker ps
-        continue-on-error: true
+          tar -czf deploy-package.tar.gz $INFRA_PATH $CONTA_SERVICE_PATH/target/*.jar $KAFKA_SERVICE_PATH/target/*.jar docker-compose.yml || true
+          ls -lh deploy-package.tar.gz
 
-      # 🧾 9. Logs resumidos dos serviços
-      - name: 📜 Mostrar logs dos serviços (resumo)
-        run: |
-          echo "📜 Logs dos containers ativos:"
-          docker compose -f $INFRA_PATH/docker-compose.yml logs --tail=50
-        continue-on-error: true
+      # 🔑 9. Conectar e enviar arquivos para VPS
+      - name: 🔑 Enviar arquivos para VPS (Hostinger)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "deploy-package.tar.gz"
+          target: "~/api-funcoes-teste-spring/"
 
-      # 🧹 10. Finalização do pipeline
-      - name: 🧹 Encerrando containers
-        run: docker compose -f $INFRA_PATH/docker-compose.yml down -v
-        continue-on-error: true
+      # 🚀 10. Deploy remoto na VPS
+      - name: 🚀 Executar deploy na VPS (Hostinger)
+        if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'production'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            echo "🚀 Iniciando deploy na VPS..."
+            cd ~/api-funcoes-teste-spring
+
+            # Define ambiente correto
+            if [ "${GITHUB_REF##*/}" == "develop" ]; then
+              export SPRING_PROFILES_ACTIVE=dev
+            else
+              export SPRING_PROFILES_ACTIVE=prod
+            fi
+
+            echo "📦 Extraindo novo pacote..."
+            tar -xzf deploy-package.tar.gz
+            rm deploy-package.tar.gz
+
+            echo "🧹 Encerrando containers antigos..."
+            docker compose -f infra/docker-compose.yml down -v || true
+
+            echo "🐳 Subindo containers atualizados..."
+            docker compose -f infra/docker-compose.yml up -d --build
+
+            echo "✅ Deploy concluído com sucesso!"
