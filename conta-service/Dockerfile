@@ -1,19 +1,15 @@
+# Dockerfile do conta-service
 FROM eclipse-temurin:21-jre-jammy
 
+# Criar diretório da aplicação
 WORKDIR /app
 
-# Instalar curl para health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Copiar o jar gerado pelo Maven
+# Atenção: o jar deve ser gerado antes de rodar docker build
+COPY target/conta-service-*.jar app.jar
 
-# Copiar JAR da aplicação
-COPY target/*.jar app.jar
+# Porta da aplicação
+EXPOSE 8081
 
-# Expor porta padrão do Spring Boot (interna do container)
-EXPOSE 8080
-
-# Healthcheck usando endpoint de liveness para evitar marcar unhealthy por dependências externas.
-HEALTHCHECK --interval=20s --timeout=10s --start-period=60s --retries=5 \
-    CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
-
-# Entrypoint
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Comando para rodar o serviço
+ENTRYPOINT ["java","-jar","app.jar"]

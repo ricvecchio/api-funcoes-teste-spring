@@ -35,7 +35,23 @@ jobs:
           echo "KAFKA_SERVICE_PATH=./kafka-service" >> .env
           echo "INFRA_PATH=./infra" >> .env
 
-      - name: 🐳 Buildando imagens Docker com cache
+      - name: 🏗️ Build conta-service
+        run: |
+          echo "🏗️ Buildando conta-service..."
+          cd ./conta-service
+          ./mvnw clean package -DskipTests
+          cd ..
+          echo "✅ Build concluído para conta-service"
+
+      - name: 🏗️ Build kafka-service
+        run: |
+          echo "🏗️ Buildando kafka-service..."
+          cd ./kafka-service
+          ./mvnw clean package -DskipTests
+          cd ..
+          echo "✅ Build concluído para kafka-service"
+
+      - name: 🐳 Build imagens Docker com cache
         run: |
           echo "🐳 Buildando imagens Docker com cache..."
           docker compose --env-file .env -f ./infra/docker-compose.yml build
