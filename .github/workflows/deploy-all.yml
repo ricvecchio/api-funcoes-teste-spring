@@ -1,14 +1,17 @@
-name: 🚀 Deploy All Services
+name: 🚀 CI/CD - Build e Deploy Completo
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     env:
       DOCKER_BUILDKIT: 1
       COMPOSE_DOCKER_CLI_BUILD: 1
@@ -18,46 +21,72 @@ jobs:
       INFRA_PATH: ./infra
 
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v3
+      # -------------------------------------------
+      # 🧩 Checkout do código
+      # -------------------------------------------
+      - name: 📦 Checkout do código
+        uses: actions/checkout@v4
 
-      - name: ☕ Setup Java 21
-        uses: actions/setup-java@v3
+      # -------------------------------------------
+      # ☕ Setup do Java para builds Maven
+      # -------------------------------------------
+      - name: ☕ Configurando Java 21
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: 🏗️ Build conta-service
+      # -------------------------------------------
+      # 🧱 Build do serviço Java (conta-service)
+      # -------------------------------------------
+      - name: 🏗️ Buildando conta-service (Maven)
+        working-directory: ./conta-service
         run: |
           echo "🏗️ Buildando conta-service..."
-          cd ${{ env.CONTA_SERVICE_PATH }}
           mvn clean package -DskipTests
-          cd -
           echo "✅ Build concluído para conta-service"
 
-      - name: 🏗️ Build kafka-service
-        run: |
-          echo "🏗️ Buildando kafka-service..."
-          cd ${{ env.KAFKA_SERVICE_PATH }}
-          mvn clean package -DskipTests
-          cd -
-          echo "✅ Build concluído para kafka-service"
+      # -------------------------------------------
+      # 🧰 Setup do Docker Buildx (para cache avançado)
+      # -------------------------------------------
+      - name: 🔧 Configurando Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
+      # -------------------------------------------
+      # 💾 Configurando cache de build Docker
+      # -------------------------------------------
+      - name: 💾 Restaurando cache de build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      # -------------------------------------------
+      # 🐳 Build das imagens Docker
+      # -------------------------------------------
       - name: 🐳 Buildando imagens Docker com cache
         run: |
           echo "🐳 Buildando imagens Docker com cache..."
-          docker compose --env-file .env -f ${{ env.INFRA_PATH }}/docker-compose.yml build
+          docker compose --env-file ./infra/.env -f ./infra/docker-compose.yml build
           echo "✅ Build de imagens Docker concluído"
 
+      # -------------------------------------------
+      # 🚀 Subindo containers
+      # -------------------------------------------
       - name: 🚀 Subindo containers
         run: |
           echo "🚀 Subindo containers..."
-          docker compose --env-file .env -f ${{ env.INFRA_PATH }}/docker-compose.yml up -d
-          echo "✅ Containers subidos"
+          docker compose --env-file ./infra/.env -f ./infra/docker-compose.yml up -d
+          echo "✅ Containers subidos com sucesso"
 
+      # -------------------------------------------
+      # 🔍 Logs detalhados dos containers
+      # -------------------------------------------
       - name: 🔍 Logs detalhados dos serviços
         run: |
-          echo "🔍 Containers ativos:"
+          echo "🔍 Listando containers ativos..."
           docker ps -a
           echo "=== conta-service logs ==="
           docker logs conta-service || true
@@ -69,3 +98,15 @@ jobs:
           docker logs kafka-broker || true
           echo "=== zookeeper logs ==="
           docker logs zookeeper || true
+
+      # -------------------------------------------
+      # 🧹 Limpeza final (para runners GitHub)
+      # -------------------------------------------
+      - name: 🧹 Limpando containers e cache
+        if: always()
+        run: |
+          echo "🧹 Removendo containers..."
+          docker compose -f ./infra/docker-compose.yml down -v || true
+          echo "🧹 Limpando cache temporário..."
+          rm -rf /tmp/.buildx-cache || true
+          echo "✅ Limpeza concluída"
