@@ -1,6 +1,12 @@
 # ======================================
 # 🧱 INFRAESTRUTURA DO PROJETO
 # ======================================
+# Gerencia todos os serviços:
+# - conta-service (backend principal)
+# - kafka-service (microserviço)
+# - postgres-db
+# ======================================
+
 services:
   # ======================================
   # 📦 CONTA SERVICE - API principal Spring Boot
@@ -8,14 +14,14 @@ services:
   conta-service:
     container_name: conta-service
     build:
-      context: ${CONTA_SERVICE_PATH}
+      context: ../conta-service   # Caminho relativo correto
       dockerfile: Dockerfile
     image: conta-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
-      - "${CONTA_SERVICE_PORT:-8081}:8080"
+      - "${CONTA_SERVICE_PORT:-8081}:${CONTA_SERVICE_PORT:-8081}"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: ${JAVA_OPTS}
+      JAVA_OPTS: "-Xms256m -Xmx512m"
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -37,14 +43,14 @@ services:
   kafka-service:
     container_name: kafka-service
     build:
-      context: ${KAFKA_SERVICE_PATH}
+      context: ../kafka-service   # Caminho relativo correto
       dockerfile: Dockerfile
     image: kafka-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
-      - "${KAFKA_SERVICE_PORT:-8082}:8080"
+      - "${KAFKA_SERVICE_PORT:-8082}:${KAFKA_SERVICE_PORT:-8082}"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: ${JAVA_OPTS}
+      JAVA_OPTS: "-Xms256m -Xmx512m"
       DB_URL: ${DB_URL}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -66,7 +72,7 @@ services:
     image: postgres:16
     container_name: postgres-db
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-5432}:${DB_PORT:-5432}"
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}

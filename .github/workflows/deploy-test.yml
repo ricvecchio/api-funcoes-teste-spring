@@ -5,18 +5,11 @@ on:
     branches:
       - develop
   workflow_dispatch:
-    inputs:
-      environment:
-        description: "Ambiente de destino"
-        required: true
-        default: "local"
 
 env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
   IMAGE_CACHE_DIR: /tmp/.buildx-cache
-  CONTA_SERVICE_PATH: ./conta-service
-  KAFKA_SERVICE_PATH: ./kafka-service
   INFRA_PATH: ./infra
 
 jobs:
@@ -34,40 +27,20 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: 🧱 Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: 🐳 Build Docker Compose
+        run: |
+          echo "🐳 Iniciando build..."
+          docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
+          echo "✅ Build concluído."
 
-      - name: 💾 Cache do Docker Buildx
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: 🏗️ Compilando serviços Java
-        run: mvn -B clean package -DskipTests
-        working-directory: ${{ github.workspace }}/conta-service
-
-      - name: 🏗️ Compilando kafka-service
-        run: mvn -B clean package -DskipTests
-        working-directory: ${{ github.workspace }}/kafka-service
-
-      - name: 🐳 Buildando imagens Docker com cache
-        run: docker compose -f $INFRA_PATH/docker-compose.yml build --progress=plain
-
-      - name: 🧹 Listar imagens geradas
+      - name: 🧹 Listar imagens
         run: docker images
 
-      - name: 🧪 Subir containers para teste rápido
+      - name: 🧪 Teste rápido de containers
         run: |
           docker compose -f $INFRA_PATH/docker-compose.yml up -d
           sleep 15
           docker ps
-        continue-on-error: true
-
-      - name: 📜 Mostrar logs dos serviços (resumo)
-        run: docker compose -f $INFRA_PATH/docker-compose.yml logs --tail=50
         continue-on-error: true
 
       - name: 🧹 Encerrando containers
