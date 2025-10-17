@@ -1,108 +1,42 @@
-# ======================================
-# 🧱 INFRAESTRUTURA DO PROJETO
-# ======================================
-# Serviços:
-# - conta-service: API principal
-# - kafka-service: microserviço de mensageria
-# - postgres: banco de dados
-# Use .env ou .env.prod para definir variáveis de ambiente
-# ======================================
+version: "3.8"
 
 services:
-  # ======================================
-  # 📦 CONTA SERVICE - API Spring Boot
-  # ======================================
-  conta-service:
-    container_name: conta-service
-    build:
-      context: ../conta-service  # Caminho relativo ao docker-compose.yml
-      dockerfile: Dockerfile
-    image: conta-service:${SPRING_PROFILES_ACTIVE:-latest}
-    ports:
-      - "${CONTA_SERVICE_PORT:-8081}:8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: "-Xms256m -Xmx512m"
-      DB_URL: ${DB_URL}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-    depends_on:
-      - kafka-service
-      - postgres
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - backend
-
-  # ======================================
-  # ⚙️ KAFKA SERVICE
-  # ======================================
-  kafka-service:
-    container_name: kafka-service
-    build:
-      context: ../kafka-service  # Caminho relativo ao docker-compose.yml
-      dockerfile: Dockerfile
-    image: kafka-service:${SPRING_PROFILES_ACTIVE:-latest}
-    ports:
-      - "${KAFKA_SERVICE_PORT:-8082}:8080"
-    environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      JAVA_OPTS: "-Xms256m -Xmx512m"
-      DB_URL: ${DB_URL}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-    depends_on:
-      - postgres
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - backend
-
-  # ======================================
-  # 🐘 POSTGRES DATABASE
-  # ======================================
-  postgres:
-    image: postgres:16
+  postgres-db:
+    image: postgres:15
     container_name: postgres-db
-    ports:
-      - "${DB_PORT:-5432}:5432"
     environment:
+      POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+    ports:
+      - "${DB_PORT}:5432"
     networks:
-      - backend
+      - app-network
 
-# ======================================
-# 🗄️ VOLUMES
-# ======================================
-volumes:
-  pgdata:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
+    networks:
+      - app-network
 
-# ======================================
-# 🌐 NETWORKS
-# ======================================
+  kafka-broker:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka-broker
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_BROKER_PORT}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "${KAFKA_BROKER_PORT}:${KAFKA_BROKER_PORT}"
+    networks:
+      - app-network
+
 networks:
-  backend:
+  app-network:
     driver: bridge
