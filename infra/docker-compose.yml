@@ -57,10 +57,12 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: 'false'
     ports:
       - "${KAFKA_BROKER_PORT}:${KAFKA_BROKER_PORT}"
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "${KAFKA_BROKER_PORT}"]
+      # Healthcheck confiável que aguarda o Kafka aceitar metadata requests
+      test: ["CMD-SHELL", "cub kafka-ready -b localhost:${KAFKA_BROKER_PORT} 1 20 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -122,11 +124,12 @@ services:
     ports:
       - "${KAFKA_SERVICE_PORT}:${KAFKA_SERVICE_PORT}"
     healthcheck:
+      # Healthcheck confiável aguardando o Spring Boot iniciar
       test: ["CMD-SHELL", "curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 20
-      start_period: 30s
+      retries: 30
+      start_period: 60s
 
 volumes:
   postgres_data:

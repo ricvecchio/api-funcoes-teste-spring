@@ -32,7 +32,7 @@ jobs:
           cd ../${KAFKA_SERVICE_PATH} && mvn clean package -DskipTests -q
 
       - name: 🧩 Instalar dependências auxiliares
-        run: sudo apt-get update && sudo apt-get install -y curl netcat-openbsd
+        run: sudo apt-get update && sudo apt-get install -y curl netcat
 
       - name: 🐳 Build das imagens Docker
         run: |
@@ -47,7 +47,7 @@ jobs:
       - name: 🕓 Aguardar dependências ficarem saudáveis
         run: |
           echo "⏳ Aguardando serviços dependentes (Postgres, Zookeeper, Kafka Broker)..."
-          services=("postgres-db" "zookeeper" "kafka-broker")
+          services=("postgres-db" "zookeeper")
           max_attempts=30
           sleep_interval=10
 
@@ -65,9 +65,28 @@ jobs:
             done
             if [ "$status" != "healthy" ]; then
               echo "❌ $service não ficou saudável após $max_attempts tentativas."
+              docker logs $service || true
               exit 1
             fi
           done
+
+          # Verificar Kafka Broker via cub kafka-ready
+          attempt=1
+          max_attempts=30
+          sleep_interval=10
+          echo "⏳ Aguardando Kafka Broker estar pronto via cub kafka-ready..."
+          until docker exec kafka-broker cub kafka-ready -b localhost:${KAFKA_BROKER_PORT} 1 20 || [ $attempt -gt $max_attempts ]; do
+            echo "⏱ [kafka-broker] Tentativa $attempt/$max_attempts -> ainda não pronto"
+            sleep $sleep_interval
+            attempt=$((attempt + 1))
+          done
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ Kafka Broker não ficou pronto após $max_attempts tentativas."
+            docker logs kafka-broker || true
+            exit 1
+          fi
+          echo "✅ Kafka Broker pronto!"
+
           echo "✅ Todos os serviços dependentes estão saudáveis!"
 
       - name: 🚀 Subir microservices

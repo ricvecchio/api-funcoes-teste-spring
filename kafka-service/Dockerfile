@@ -10,6 +10,7 @@ COPY target/*.jar app.jar
 
 # Porta interna do container definida via variável de ambiente
 ARG SERVER_PORT=8080
+ENV SERVER_PORT=${SERVER_PORT}
 EXPOSE ${SERVER_PORT}
 
 # Healthcheck usando a porta interna via variável de ambiente
