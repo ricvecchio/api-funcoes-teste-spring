@@ -8,6 +8,15 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    # =========================
+    # Variáveis de ambiente globais do job
+    # =========================
+    env:
+      CONTA_SERVICE_PATH: ../conta-service
+      KAFKA_SERVICE_PATH: ../kafka-service
+      CONTA_SERVICE_PORT: 8081
+      KAFKA_SERVICE_PORT: 8082
+
     steps:
       # ======================================
       # Checkout do repositório
@@ -30,8 +39,8 @@ jobs:
       # ======================================
       - name: 🧱 Build dos serviços
         run: |
-          cd ${CONTA_SERVICE_PATH} && mvn clean package -DskipTests -q
-          cd ../${KAFKA_SERVICE_PATH} && mvn clean package -DskipTests -q
+          cd $CONTA_SERVICE_PATH && mvn clean package -DskipTests -q
+          cd $KAFKA_SERVICE_PATH && mvn clean package -DskipTests -q
 
       # ======================================
       # Instalar ferramentas auxiliares
@@ -44,8 +53,8 @@ jobs:
       # ======================================
       - name: 🐳 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
-          docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
+          docker build -t conta-service:latest -f $CONTA_SERVICE_PATH/Dockerfile $CONTA_SERVICE_PATH
+          docker build -t kafka-service:latest -f $KAFKA_SERVICE_PATH/Dockerfile $KAFKA_SERVICE_PATH
 
       # ======================================
       # Subir ambiente completo com Docker Compose
@@ -100,17 +109,17 @@ jobs:
       - name: 🔍 Testar endpoints
         run: |
           echo "✅ Verificando conta-service"
-          curl -f http://localhost:${CONTA_SERVICE_PORT}/actuator/health
+          curl -f http://localhost:$CONTA_SERVICE_PORT/actuator/health
           echo "✅ Verificando kafka-service"
-          curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
+          curl -f http://localhost:$KAFKA_SERVICE_PORT/actuator/health
 
       # ======================================
       # Executar testes automáticos Maven
       # ======================================
       - name: 🧪 Executar testes Maven
         run: |
-          cd ${CONTA_SERVICE_PATH} && mvn test -q
-          cd ../${KAFKA_SERVICE_PATH} && mvn test -q
+          cd $CONTA_SERVICE_PATH && mvn test -q
+          cd $KAFKA_SERVICE_PATH && mvn test -q
 
       # ======================================
       # Logs detalhados em caso de falha
