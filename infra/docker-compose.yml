@@ -1,23 +1,20 @@
-version: "3.9"
-
 # ======================================
 # 🧱 INFRAESTRUTURA DO PROJETO
 # ======================================
-# Este compose gerencia todos os serviços:
-# - conta-service (backend principal)
-# - kafka-service (comunicação assíncrona)
-# - postgres-db (banco de dados relacional)
-# O ambiente (dev/prod) é definido via .env
+# Serviços:
+# - conta-service
+# - kafka-service
+# - postgres
 # ======================================
 
 services:
   # ======================================
-  # 📦 CONTA SERVICE - API principal Spring Boot
+  # 📦 CONTA SERVICE
   # ======================================
   conta-service:
     container_name: conta-service
     build:
-      context: ${CONTA_SERVICE_PATH}
+      context: ./../conta-service   # ⚠️ Caminho fora de infra, como no deploy original
       dockerfile: Dockerfile
     image: conta-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -37,16 +34,14 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - backend
 
   # ======================================
-  # ⚙️ KAFKA SERVICE - microserviço de mensageria
+  # ⚙️ KAFKA SERVICE
   # ======================================
   kafka-service:
     container_name: kafka-service
     build:
-      context: ${KAFKA_SERVICE_PATH}
+      context: ./../kafka-service   # ⚠️ Caminho fora de infra
       dockerfile: Dockerfile
     image: kafka-service:${SPRING_PROFILES_ACTIVE:-latest}
     ports:
@@ -65,11 +60,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - backend
 
   # ======================================
-  # 🐘 POSTGRES DATABASE
+  # 🐘 POSTGRES
   # ======================================
   postgres:
     image: postgres:16
@@ -93,18 +86,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - backend
 
-# ======================================
-# 🗄️ VOLUMES
-# ======================================
 volumes:
   pgdata:
-
-# ======================================
-# 🌐 NETWORKS
-# ======================================
-networks:
-  backend:
-    driver: bridge
