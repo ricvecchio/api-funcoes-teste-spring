@@ -8,15 +8,6 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    # =========================
-    # Variáveis de ambiente globais do job
-    # =========================
-    env:
-      CONTA_SERVICE_PATH: ../conta-service
-      KAFKA_SERVICE_PATH: ../kafka-service
-      CONTA_SERVICE_PORT: 8081
-      KAFKA_SERVICE_PORT: 8082
-
     steps:
       # ======================================
       # Checkout do repositório
@@ -39,8 +30,8 @@ jobs:
       # ======================================
       - name: 🧱 Build dos serviços
         run: |
-          cd $CONTA_SERVICE_PATH && mvn clean package -DskipTests -q
-          cd $KAFKA_SERVICE_PATH && mvn clean package -DskipTests -q
+          cd ${CONTA_SERVICE_PATH} && mvn clean package -DskipTests -q
+          cd ../${KAFKA_SERVICE_PATH} && mvn clean package -DskipTests -q
 
       # ======================================
       # Instalar ferramentas auxiliares
@@ -53,8 +44,8 @@ jobs:
       # ======================================
       - name: 🐳 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f $CONTA_SERVICE_PATH/Dockerfile $CONTA_SERVICE_PATH
-          docker build -t kafka-service:latest -f $KAFKA_SERVICE_PATH/Dockerfile $KAFKA_SERVICE_PATH
+          docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
+          docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
 
       # ======================================
       # Subir ambiente completo com Docker Compose
@@ -70,37 +61,16 @@ jobs:
       - name: 🕓 Aguardar containers ficarem saudáveis
         run: |
           echo "⏳ Aguardando containers ficarem saudáveis..."
-
-          # Conta-service
-          attempts=0
-          max_attempts=40
-          until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ] || [ $attempts -ge $max_attempts ]; do
-            attempts=$((attempts+1))
-            echo "⏳ conta-service ainda não saudável ($attempts/$max_attempts)"
-            sleep 15
-          done
-          if [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" != "healthy" ]; then
-            echo "❌ conta-service não ficou saudável!"
-            docker logs conta-service
-            exit 1
-          fi
-          echo "✅ conta-service saudável!"
-
-          # Kafka-service
-          attempts=0
-          max_attempts=60
-          until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ] || [ $attempts -ge $max_attempts ]; do
-            attempts=$((attempts+1))
-            echo "⏳ kafka-service ainda não saudável ($attempts/$max_attempts)"
-            sleep 15
-          done
-          if [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" != "healthy" ]; then
-            echo "❌ kafka-service não ficou saudável!"
-            docker logs kafka-service
-            exit 1
-          fi
-          echo "✅ kafka-service saudável!"
-
+          timeout 900 bash -c '
+            until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ]; do
+              echo "⏳ Aguardando conta-service..."; sleep 15;
+            done
+            echo "✅ conta-service saudável!"
+            until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ]; do
+              echo "⏳ Aguardando kafka-service..."; sleep 15;
+            done
+            echo "✅ kafka-service saudável!"
+          '
           docker compose -f infra/docker-compose.yml ps
 
       # ======================================
@@ -109,17 +79,17 @@ jobs:
       - name: 🔍 Testar endpoints
         run: |
           echo "✅ Verificando conta-service"
-          curl -f http://localhost:$CONTA_SERVICE_PORT/actuator/health
+          curl -f http://localhost:${CONTA_SERVICE_PORT}/actuator/health
           echo "✅ Verificando kafka-service"
-          curl -f http://localhost:$KAFKA_SERVICE_PORT/actuator/health
+          curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
 
       # ======================================
-      # Executar testes automáticos Maven
+      # Executar testes Maven
       # ======================================
       - name: 🧪 Executar testes Maven
         run: |
-          cd $CONTA_SERVICE_PATH && mvn test -q
-          cd $KAFKA_SERVICE_PATH && mvn test -q
+          cd ${CONTA_SERVICE_PATH} && mvn test -q
+          cd ../${KAFKA_SERVICE_PATH} && mvn test -q
 
       # ======================================
       # Logs detalhados em caso de falha
@@ -135,7 +105,7 @@ jobs:
           docker logs zookeeper || true
 
       # ======================================
-      # Limpeza final do Docker
+      # Limpeza final
       # ======================================
       - name: 🧹 Limpeza final
         if: always()
