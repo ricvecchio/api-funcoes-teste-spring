@@ -1,9 +1,7 @@
 version: "3.9"
 
 services:
-  # ======================================
-  # 🐘 Banco de dados PostgreSQL
-  # ======================================
+  # PostgreSQL
   postgres-db:
     image: postgres:15
     container_name: postgres-db
@@ -21,9 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ======================================
-  # 🐦 Zookeeper (necessário para Kafka)
-  # ======================================
+  # Zookeeper
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper
@@ -38,9 +34,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ======================================
-  # 🥨 Kafka broker principal
-  # ======================================
+  # Kafka Broker
   kafka-broker:
     image: confluentinc/cp-kafka:7.3.0
     container_name: kafka-broker
@@ -60,8 +54,8 @@ services:
       - sh
       - -c
       - |
-        echo "🕒 Esperando o Zookeeper ficar pronto..."
-        /bin/bash -c 'for i in {1..30}; do nc -z zookeeper ${ZOOKEEPER_PORT} && break; echo "⏳ Tentando conectar ao Zookeeper... ($i/30)"; sleep 3; done'
+        echo "🕒 Esperando Zookeeper..."
+        /bin/bash -c 'for i in {1..30}; do nc -z zookeeper ${ZOOKEEPER_PORT} && break; echo "⏳ Tentando Zookeeper ($i/30)"; sleep 3; done'
         echo "✅ Zookeeper pronto! Iniciando Kafka..."
         /etc/confluent/docker/run
     healthcheck:
@@ -70,12 +64,10 @@ services:
       timeout: 5s
       retries: 10
 
-  # ======================================
-  # 🏦 Conta Service (Spring Boot REST)
-  # ======================================
+  # Conta Service
   conta-service:
     build:
-      context: ../conta-service
+      context: ${CONTA_SERVICE_PATH}
       dockerfile: Dockerfile
     image: conta-service:latest
     container_name: conta-service
@@ -93,23 +85,21 @@ services:
       - sh
       - -c
       - |
-        echo "🕒 Aguardando dependências (Postgres + Kafka)..."
-        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências... ($i/30)"; sleep 3; done'
+        echo "🕒 Aguardando dependências..."
+        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências ($i/30)"; sleep 3; done'
         echo "✅ Dependências disponíveis! Iniciando Conta Service..."
         java -jar /app/app.jar
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health || exit 1"]
       interval: 20s
       timeout: 10s
-      start_period: 180s
-      retries: 20
+      start_period: 60s
+      retries: 10
 
-  # ======================================
-  # 🔄 Kafka Service (processamento assíncrono)
-  # ======================================
+  # Kafka Service
   kafka-service:
     build:
-      context: ../kafka-service
+      context: ${KAFKA_SERVICE_PATH}
       dockerfile: Dockerfile
     image: kafka-service:latest
     container_name: kafka-service
@@ -127,8 +117,8 @@ services:
       - sh
       - -c
       - |
-        echo "🕒 Aguardando dependências (Postgres + Kafka)..."
-        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências... ($i/30)"; sleep 3; done'
+        echo "🕒 Aguardando dependências..."
+        /bin/bash -c 'for i in {1..30}; do nc -z kafka-broker ${KAFKA_BROKER_PORT} && nc -z postgres-db ${DB_PORT} && break; echo "⏳ Aguardando dependências ($i/30)"; sleep 3; done'
         echo "✅ Dependências disponíveis! Iniciando Kafka Service..."
         java -jar /app/app.jar
     healthcheck:

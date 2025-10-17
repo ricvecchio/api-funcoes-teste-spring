@@ -10,13 +10,13 @@ jobs:
 
     steps:
       # ======================================
-      # 📥 Checkout do repositório
+      # Checkout do repositório
       # ======================================
       - name: 📥 Checkout do repositório
         uses: actions/checkout@v4
 
       # ======================================
-      # ☕ Configurar JDK 21 com cache Maven
+      # Configurar JDK 21 com cache Maven
       # ======================================
       - name: ☕ Configurar JDK 21
         uses: actions/setup-java@v4
@@ -26,29 +26,29 @@ jobs:
           cache: maven
 
       # ======================================
-      # 🧱 Build dos serviços Maven (skip tests)
+      # Build dos serviços Maven (skip tests)
       # ======================================
       - name: 🧱 Build dos serviços
         run: |
-          cd conta-service && mvn clean package -DskipTests -q
-          cd ../kafka-service && mvn clean package -DskipTests -q
+          cd ${CONTA_SERVICE_PATH} && mvn clean package -DskipTests -q
+          cd ../${KAFKA_SERVICE_PATH} && mvn clean package -DskipTests -q
 
       # ======================================
-      # 🧩 Instalar dependências auxiliares
+      # Instalar ferramentas auxiliares
       # ======================================
       - name: 🧩 Instalar dependências auxiliares
         run: sudo apt-get update && sudo apt-get install -y curl netcat-openbsd
 
       # ======================================
-      # 🐳 Build das imagens Docker
+      # Build das imagens Docker
       # ======================================
       - name: 🐳 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f conta-service/Dockerfile conta-service
-          docker build -t kafka-service:latest -f kafka-service/Dockerfile kafka-service
+          docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
+          docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
 
       # ======================================
-      # 🚀 Subir ambiente completo com Docker Compose
+      # Subir ambiente completo com Docker Compose
       # ======================================
       - name: 🚀 Subir ambiente Docker Compose
         run: |
@@ -56,31 +56,46 @@ jobs:
           docker compose --env-file .env up -d --build
 
       # ======================================
-      # 🕓 Aguardar containers ficarem saudáveis
+      # Aguardar containers ficarem saudáveis
       # ======================================
       - name: 🕓 Aguardar containers ficarem saudáveis
         run: |
           echo "⏳ Aguardando containers ficarem saudáveis..."
-          for service in conta-service kafka-service; do
-            echo "⏳ Aguardando $service..."
-            attempts=0
-            max_attempts=60   # até 15 minutos (60 * 15s)
-            until [ "$(docker inspect -f {{.State.Health.Status}} $service)" == "healthy" ] || [ $attempts -ge $max_attempts ]; do
-              attempts=$((attempts+1))
-              echo "⏳ $service não está saudável ainda... Tentativa $attempts/$max_attempts"
-              sleep 15
-            done
-            if [ "$(docker inspect -f {{.State.Health.Status}} $service)" != "healthy" ]; then
-              echo "❌ $service não ficou saudável após $max_attempts tentativas!"
-              docker logs $service
-              exit 1
-            fi
-            echo "✅ $service saudável!"
+
+          # Conta-service
+          attempts=0
+          max_attempts=40
+          until [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" == "healthy" ] || [ $attempts -ge $max_attempts ]; do
+            attempts=$((attempts+1))
+            echo "⏳ conta-service ainda não saudável ($attempts/$max_attempts)"
+            sleep 15
           done
+          if [ "$(docker inspect -f {{.State.Health.Status}} conta-service)" != "healthy" ]; then
+            echo "❌ conta-service não ficou saudável!"
+            docker logs conta-service
+            exit 1
+          fi
+          echo "✅ conta-service saudável!"
+
+          # Kafka-service
+          attempts=0
+          max_attempts=60
+          until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ] || [ $attempts -ge $max_attempts ]; do
+            attempts=$((attempts+1))
+            echo "⏳ kafka-service ainda não saudável ($attempts/$max_attempts)"
+            sleep 15
+          done
+          if [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" != "healthy" ]; then
+            echo "❌ kafka-service não ficou saudável!"
+            docker logs kafka-service
+            exit 1
+          fi
+          echo "✅ kafka-service saudável!"
+
           docker compose -f infra/docker-compose.yml ps
 
       # ======================================
-      # 🔍 Testar endpoints dos serviços
+      # Testar endpoints dos serviços
       # ======================================
       - name: 🔍 Testar endpoints
         run: |
@@ -90,15 +105,15 @@ jobs:
           curl -f http://localhost:${KAFKA_SERVICE_PORT}/actuator/health
 
       # ======================================
-      # 🧪 Executar testes automáticos Maven
+      # Executar testes automáticos Maven
       # ======================================
       - name: 🧪 Executar testes Maven
         run: |
-          cd conta-service && mvn test -q
-          cd ../kafka-service && mvn test -q
+          cd ${CONTA_SERVICE_PATH} && mvn test -q
+          cd ../${KAFKA_SERVICE_PATH} && mvn test -q
 
       # ======================================
-      # 📄 Logs detalhados em caso de falha
+      # Logs detalhados em caso de falha
       # ======================================
       - name: 📄 Logs em caso de falha
         if: failure()
@@ -111,7 +126,7 @@ jobs:
           docker logs zookeeper || true
 
       # ======================================
-      # 🧹 Limpeza final do Docker
+      # Limpeza final do Docker
       # ======================================
       - name: 🧹 Limpeza final
         if: always()
