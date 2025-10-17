@@ -1,129 +1,103 @@
-# docker-compose.yml
-# ======================================
-# Docker Compose completo para desenvolvimento local
-# ======================================
-
-version: "3.9"
-
 services:
-
-  # =========================
-  # Banco de Dados PostgreSQL
-  # =========================
   postgres-db:
     image: postgres:15
     container_name: postgres-db
     environment:
-      POSTGRES_DB: ${DB_NAME:-contas_db}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - app-network
 
-  # =========================
-  # Zookeeper
-  # =========================
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
     environment:
-      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT:-2181}
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "${ZOOKEEPER_PORT:-2181}:2181"
+      - "${ZOOKEEPER_PORT}:2181"
     networks:
       - app-network
 
-  # =========================
-  # Kafka Broker
-  # =========================
   kafka-broker:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-broker
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT:-2181}
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT:-9092}
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ports:
-      - "${KAFKA_BROKER_PORT:-9092}:9092"
-    networks:
-      - app-network
     depends_on:
       - zookeeper
-    command:
-      - bash
-      - -c
-      - |
-        # Espera zookeeper
-        cub zk-ready -z zookeeper:2181 1 20
-        # Inicializa Kafka
-        /etc/confluent/docker/run & sleep 10
-        # Criação automática de tópicos usados pelos serviços
-        kafka-topics --create --bootstrap-server kafka-broker:9092 --replication-factor 1 --partitions 1 --topic contas-abrir || true
-        kafka-topics --create --bootstrap-server kafka-broker:9092 --replication-factor 1 --partitions 1 --topic kafka-events || true
-        wait
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "${KAFKA_BROKER_PORT}:9092"
+    networks:
+      - app-network
 
-  # =========================
-  # Conta Service
-  # =========================
   conta-service:
     build:
       context: ../conta-service
       dockerfile: Dockerfile
     container_name: conta-service
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT:-5432}/${DB_NAME:-contas_db}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT:-9092}
-      SERVER_PORT: ${CONTA_SERVICE_PORT:-8081}
-    ports:
-      - "${CONTA_SERVICE_PORT:-8081}:${CONTA_SERVICE_PORT:-8081}"
-    networks:
-      - app-network
     depends_on:
       - postgres-db
       - kafka-broker
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
+      SERVER_PORT: ${CONTA_SERVICE_PORT}
+    ports:
+      - "${CONTA_SERVICE_PORT}:8080"
+    networks:
+      - app-network
 
-  # =========================
-  # Kafka Service
-  # =========================
   kafka-service:
     build:
       context: ../kafka-service
       dockerfile: Dockerfile
     container_name: kafka-service
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT:-5432}/${DB_NAME:-contas_db}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-postgres}
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT:-9092}
-      SERVER_PORT: ${KAFKA_SERVICE_PORT:-8082}
-    ports:
-      - "${KAFKA_SERVICE_PORT:-8082}:${KAFKA_SERVICE_PORT:-8082}"
-    networks:
-      - app-network
     depends_on:
       - postgres-db
       - kafka-broker
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
+      SERVER_PORT: ${KAFKA_SERVICE_PORT}
+    ports:
+      - "${KAFKA_SERVICE_PORT}:8080"
+    networks:
+      - app-network
 
-# =========================
-# Redes
-# =========================
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka-init
+    depends_on:
+      - kafka-broker
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Criando tópico Kafka: contas-abrir"
+        kafka-topics --create --bootstrap-server kafka-broker:${KAFKA_BROKER_PORT} \
+          --replication-factor 1 --partitions 1 --topic contas-abrir || true
+        echo "Tópico pronto."
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
 
-# =========================
-# Volumes persistentes
-# =========================
 volumes:
   pgdata:
-    driver: local
