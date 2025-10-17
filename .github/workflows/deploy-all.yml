@@ -2,53 +2,62 @@ name: 🚀 Deploy All Services
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: 🏗️ Build & Deploy Docker Services
     runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
-      CONTA_SERVICE_PATH: ./conta-service
-      KAFKA_SERVICE_PATH: ./kafka-service
-      INFRA_PATH: ./infra
 
     steps:
-      - name: 🔽 Checkout repository
+      - name: 🔽 Checkout code
         uses: actions/checkout@v3
 
-      - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: 📦 Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-docker-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-docker-
+      - name: 📝 Criar arquivo .env
+        run: |
+          echo "DB_NAME=conta_db" >> .env
+          echo "DB_USER=postgres" >> .env
+          echo "DB_PASSWORD=password" >> .env
+          echo "DB_PORT=5432" >> .env
+          echo "DB_URL=jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}" >> .env
+          echo "ZOOKEEPER_PORT=2181" >> .env
+          echo "KAFKA_BROKER_PORT=9092" >> .env
+          echo "KAFKA_BOOTSTRAP_SERVERS=kafka-broker:${KAFKA_BROKER_PORT}" >> .env
+          echo "CONTA_SERVICE_PORT=8081" >> .env
+          echo "KAFKA_SERVICE_PORT=8082" >> .env
+          echo "CONTA_SERVICE_PATH=./conta-service" >> .env
+          echo "KAFKA_SERVICE_PATH=./kafka-service" >> .env
+          echo "INFRA_PATH=./infra" >> .env
 
       - name: 🐳 Buildando imagens Docker com cache
         run: |
           echo "🐳 Buildando imagens Docker com cache..."
-          docker compose --env-file .env -f ${{ env.INFRA_PATH }}/docker-compose.yml build
+          docker compose --env-file .env -f ./infra/docker-compose.yml build
           echo "✅ Build de imagens Docker concluído"
 
       - name: 🚀 Subindo containers
         run: |
-          echo "🚀 Subindo containers..."
-          docker compose --env-file .env -f ${{ env.INFRA_PATH }}/docker-compose.yml up -d
-          echo "✅ Containers rodando"
+          echo "🚀 Subindo containers em background..."
+          docker compose --env-file .env -f ./infra/docker-compose.yml up -d
+          echo "✅ Containers iniciados"
 
       - name: 🔍 Logs detalhados dos serviços
         run: |
-          echo "🔍 Logs detalhados dos serviços:"
+          echo "🔍 Containers ativos:"
           docker ps -a
-          for svc in conta-service kafka-service postgres-db kafka-broker zookeeper; do
-            echo "=== $svc logs ==="
-            docker logs $svc || true
-          done
+          echo "=== conta-service logs ==="
+          docker logs conta-service || true
+          echo "=== kafka-service logs ==="
+          docker logs kafka-service || true
+          echo "=== postgres-db logs ==="
+          docker logs postgres-db || true
+          echo "=== kafka-broker logs ==="
+          docker logs kafka-broker || true
+          echo "=== zookeeper logs ==="
+          docker logs zookeeper || true
