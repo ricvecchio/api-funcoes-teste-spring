@@ -79,7 +79,7 @@ jobs:
         run: |
           echo "⏳ Aguardando microservices (Conta Service e Kafka Service) com logs detalhados..."
           services=("conta-service" "kafka-service")
-          max_attempts=35
+          max_attempts=40
           sleep_interval=15
 
           for service in "${services[@]}"; do
@@ -92,9 +92,9 @@ jobs:
                 echo "⏱ [$service] Tentativa $attempt/$max_attempts -> Status: $status"
           
                 # Se unhealthy, mostrar logs para debug
-                if [ "$status" == "unhealthy" ] && [ $attempt -gt 5 ]; then
-                  echo "🔍 [$service] Logs (últimas 20 linhas):"
-                  docker logs $service --tail 20 2>/dev/null || echo "⚠️  Não foi possível obter logs"
+                if [ "$status" == "unhealthy" ] && [ $attempt -gt 3 ]; then
+                  echo "🔍 [$service] Logs (últimas 30 linhas):"
+                  docker logs $service --tail 30 2>/dev/null || echo "⚠️  Não foi possível obter logs"
                 fi
           
                 if [ "$status" == "healthy" ]; then
