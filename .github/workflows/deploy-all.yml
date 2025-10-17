@@ -8,6 +8,12 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    env:
+      CONTA_SERVICE_PATH: conta-service
+      KAFKA_SERVICE_PATH: kafka-service
+      CONTA_SERVICE_PORT: 8081
+      KAFKA_SERVICE_PORT: 8082
+
     steps:
       # ======================================
       # Checkout do repositório
@@ -30,8 +36,10 @@ jobs:
       # ======================================
       - name: 🧱 Build dos serviços
         run: |
-          cd ${CONTA_SERVICE_PATH} && mvn clean package -DskipTests -q
-          cd ../${KAFKA_SERVICE_PATH} && mvn clean package -DskipTests -q
+          echo "📦 Build conta-service"
+          mvn -f ${{ env.CONTA_SERVICE_PATH }}/pom.xml clean package -DskipTests -q
+          echo "📦 Build kafka-service"
+          mvn -f ${{ env.KAFKA_SERVICE_PATH }}/pom.xml clean package -DskipTests -q
 
       # ======================================
       # Instalar ferramentas auxiliares
@@ -44,8 +52,8 @@ jobs:
       # ======================================
       - name: 🐳 Build das imagens Docker
         run: |
-          docker build -t conta-service:latest -f ${CONTA_SERVICE_PATH}/Dockerfile ${CONTA_SERVICE_PATH}
-          docker build -t kafka-service:latest -f ${KAFKA_SERVICE_PATH}/Dockerfile ${KAFKA_SERVICE_PATH}
+          docker build -t conta-service:latest -f ${{ env.CONTA_SERVICE_PATH }}/Dockerfile ${{ env.CONTA_SERVICE_PATH }}
+          docker build -t kafka-service:latest -f ${{ env.KAFKA_SERVICE_PATH }}/Dockerfile ${{ env.KAFKA_SERVICE_PATH }}
 
       # ======================================
       # Subir ambiente completo com Docker Compose
@@ -66,6 +74,7 @@ jobs:
               echo "⏳ Aguardando conta-service..."; sleep 15;
             done
             echo "✅ conta-service saudável!"
+
             until [ "$(docker inspect -f {{.State.Health.Status}} kafka-service)" == "healthy" ]; do
               echo "⏳ Aguardando kafka-service..."; sleep 15;
             done
@@ -88,8 +97,8 @@ jobs:
       # ======================================
       - name: 🧪 Executar testes Maven
         run: |
-          cd ${CONTA_SERVICE_PATH} && mvn test -q
-          cd ../${KAFKA_SERVICE_PATH} && mvn test -q
+          mvn -f ${{ env.CONTA_SERVICE_PATH }}/pom.xml test -q
+          mvn -f ${{ env.KAFKA_SERVICE_PATH }}/pom.xml test -q
 
       # ======================================
       # Logs detalhados em caso de falha
