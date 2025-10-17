@@ -1,4 +1,4 @@
-name: 🚀 CI/CD - Build & Deploy (VPS / Simulado)
+name: 🚀 CI/CD - Deploy (VPS / Simulado)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Deploy manual para main"
+        description: "Escolha o ambiente"
         required: true
         default: "production"
 
@@ -15,8 +15,8 @@ env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
   IMAGE_CACHE_DIR: /tmp/.buildx-cache
-  CONTA_SERVICE_PATH: ../conta-service
-  KAFKA_SERVICE_PATH: ../kafka-service
+  CONTA_SERVICE_PATH: ./conta-service
+  KAFKA_SERVICE_PATH: ./kafka-service
   INFRA_PATH: ./infra
   ENV_FILE_DEV: ./infra/.env
   ENV_FILE_PROD: ./infra/.env.prod
@@ -24,6 +24,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: 📦 Checkout do código
         uses: actions/checkout@v4
@@ -46,35 +47,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: 🔨 Build dos serviços Java
+      - name: 🏗️ Compilando serviços Java
         run: |
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
 
-      - name: 🐳 Build das imagens Docker (simulado)
+      - name: 🐳 Build imagens Docker (simulação)
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+          if [ "${GITHUB_REF_NAME}" == "develop" ]; then
             docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
           else
-            echo "🚀 Deploy manual para main. Simulação de build apenas."
+            echo "🚀 Deploy manual para main (simulado)"
           fi
 
-      - name: 🧹 Listar imagens
+      - name: 🧹 Listar imagens geradas
         run: docker images
 
-      - name: 🧪 Teste rápido containers (apenas dev)
-        if: github.ref == 'refs/heads/develop'
+      - name: 📦 Compactar artefatos (simulado)
         run: |
-          docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml up -d
-          sleep 15
-          docker ps
-        continue-on-error: true
+          echo "📦 Criando pacote de deploy simulado..."
+          tar -czf deploy-package.tar.gz $INFRA_PATH $CONTA_SERVICE_PATH/target/*.jar $KAFKA_SERVICE_PATH/target/*.jar || true
+          ls -lh deploy-package.tar.gz
 
-      - name: 🧹 Encerrar containers (apenas dev)
-        if: github.ref == 'refs/heads/develop'
-        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml down -v
-        continue-on-error: true
-
-      - name: 🔹 Deploy simulado para main
-        if: github.ref == 'refs/heads/main'
-        run: echo "Simulação de deploy para main (aguardando VPS real)"
+      - name: 🚀 Deploy remoto (simulado)
+        run: |
+          if [ "${GITHUB_REF_NAME}" == "develop" ]; then
+            echo "🚀 Deploy automático para develop (simulado)"
+          else
+            echo "🛑 Deploy para main precisa de aprovação manual"

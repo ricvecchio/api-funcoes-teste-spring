@@ -3,15 +3,16 @@ version: "3.9"
 # ======================================
 # 🧱 INFRAESTRUTURA DO PROJETO
 # ======================================
-# Gerencia:
-# - conta-service
-# - kafka-service
-# - postgres
+# Este compose gerencia todos os serviços:
+# - conta-service (backend principal)
+# - kafka-service (comunicação assíncrona)
+# - postgres-db (banco de dados relacional)
+# O ambiente (dev/prod) é definido via .env
 # ======================================
 
 services:
   # ======================================
-  # 📦 CONTA SERVICE
+  # 📦 CONTA SERVICE - API principal Spring Boot
   # ======================================
   conta-service:
     container_name: conta-service
@@ -40,7 +41,7 @@ services:
       - backend
 
   # ======================================
-  # ⚙️ KAFKA SERVICE
+  # ⚙️ KAFKA SERVICE - microserviço de mensageria
   # ======================================
   kafka-service:
     container_name: kafka-service
@@ -95,9 +96,15 @@ services:
     networks:
       - backend
 
+# ======================================
+# 🗄️ VOLUMES
+# ======================================
 volumes:
   pgdata:
 
+# ======================================
+# 🌐 NETWORKS
+# ======================================
 networks:
   backend:
     driver: bridge

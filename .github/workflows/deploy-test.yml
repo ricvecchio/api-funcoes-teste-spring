@@ -10,8 +10,8 @@ env:
   DOCKER_BUILDKIT: 1
   COMPOSE_DOCKER_CLI_BUILD: 1
   IMAGE_CACHE_DIR: /tmp/.buildx-cache
-  CONTA_SERVICE_PATH: ../conta-service
-  KAFKA_SERVICE_PATH: ../kafka-service
+  CONTA_SERVICE_PATH: ./conta-service
+  KAFKA_SERVICE_PATH: ./kafka-service
   INFRA_PATH: ./infra
   ENV_FILE_DEV: ./infra/.env
 
@@ -41,16 +41,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: 🔨 Build dos serviços Java
+      - name: 🏗️ Compilando serviços Java
         run: |
+          echo "🏗️ Compilando conta-service..."
           cd $CONTA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ conta-service compilado com sucesso."
+
+          echo "🏗️ Compilando kafka-service..."
           cd $KAFKA_SERVICE_PATH && mvn -B clean package -DskipTests && cd ..
+          echo "✅ kafka-service compilado com sucesso."
 
-      - name: 🐳 Build das imagens Docker
+      - name: 🐳 Build imagens Docker
         run: |
+          echo "🐳 Iniciando build..."
           docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
+          echo "✅ Build concluído."
 
-      - name: 🧹 Listar imagens
+      - name: 🧹 Listar imagens geradas
         run: docker images
 
       - name: 🧪 Teste rápido containers
@@ -60,6 +67,10 @@ jobs:
           docker ps
         continue-on-error: true
 
-      - name: 🧹 Encerrar containers
+      - name: 📜 Mostrar logs resumidos
+        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml logs --tail=50
+        continue-on-error: true
+
+      - name: 🧹 Encerrando containers
         run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml down -v
         continue-on-error: true
