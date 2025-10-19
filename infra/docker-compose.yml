@@ -1,4 +1,7 @@
 services:
+  # -------------------------------
+  # Banco de dados PostgreSQL
+  # -------------------------------
   postgres-db:
     image: postgres:15
     container_name: postgres-db
@@ -13,6 +16,9 @@ services:
     networks:
       - app-network
 
+  # -------------------------------
+  # Zookeeper (Kafka)
+  # -------------------------------
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
@@ -20,10 +26,13 @@ services:
       ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
       ZOOKEEPER_TICK_TIME: 2000
     ports:
-      - "${ZOOKEEPER_PORT}:2181"
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
     networks:
       - app-network
 
+  # -------------------------------
+  # Kafka Broker
+  # -------------------------------
   kafka-broker:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-broker
@@ -34,70 +43,87 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:${KAFKA_BROKER_PORT}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
     ports:
-      - "${KAFKA_BROKER_PORT}:9092"
+      - "${KAFKA_BROKER_PORT}:${KAFKA_BROKER_PORT}"
     networks:
       - app-network
 
-  conta-service:
-    build:
-      context: ../conta-service
-      dockerfile: Dockerfile
-    container_name: conta-service
-    depends_on:
-      - postgres-db
-      - kafka-broker
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: ${CONTA_SERVICE_PORT}
-    ports:
-      - "${CONTA_SERVICE_PORT}:8080"
-    networks:
-      - app-network
-
-  kafka-service:
-    build:
-      context: ../kafka-service
-      dockerfile: Dockerfile
-    container_name: kafka-service
-    depends_on:
-      - postgres-db
-      - kafka-broker
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:${DB_PORT}/${DB_NAME}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:${KAFKA_BROKER_PORT}
-      SERVER_PORT: ${KAFKA_SERVICE_PORT}
-    ports:
-      - "${KAFKA_SERVICE_PORT}:8080"
-    networks:
-      - app-network
-
+  # -------------------------------
+  # Inicialização do tópico Kafka
+  # -------------------------------
   kafka-init:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-init
     depends_on:
       - kafka-broker
     entrypoint:
-      - sh
+      - bash
       - -c
       - |
-        echo "Criando tópico Kafka: contas-abrir"
-        kafka-topics --create --bootstrap-server kafka-broker:${KAFKA_BROKER_PORT} \
-          --replication-factor 1 --partitions 1 --topic contas-abrir || true
-        echo "Tópico pronto."
+        echo "Esperando Kafka Broker..."
+        cub kafka-ready -b kafka-broker:9092 1 20
+        echo "Criando tópico ${KAFKA_TOPIC_CONTAS_ABRIR}..."
+        kafka-topics --create --bootstrap-server kafka-broker:9092 --replication-factor 1 --partitions 1 --topic ${KAFKA_TOPIC_CONTAS_ABRIR}
+        echo "Tópico criado com sucesso."
+        tail -f /dev/null
     networks:
       - app-network
 
+  # -------------------------------
+  # Conta Service
+  # -------------------------------
+  conta-service:
+    build:
+      context: ${CONTA_SERVICE_PATH}
+    container_name: conta-service
+    depends_on:
+      - postgres-db
+      - kafka-broker
+      - kafka-init
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+    ports:
+      - "${CONTA_SERVICE_PORT}:8080"
+    networks:
+      - app-network
+
+  # -------------------------------
+  # Kafka Service
+  # -------------------------------
+  kafka-service:
+    build:
+      context: ${KAFKA_SERVICE_PATH}
+    container_name: kafka-service
+    depends_on:
+      - postgres-db
+      - kafka-broker
+      - kafka-init
+    environment:
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+    ports:
+      - "${KAFKA_SERVICE_PORT}:8080"
+    networks:
+      - app-network
+
+# -------------------------------
+# Redes
+# -------------------------------
 networks:
   app-network:
     driver: bridge
 
+# -------------------------------
+# Volumes
+# -------------------------------
 volumes:
   pgdata:
