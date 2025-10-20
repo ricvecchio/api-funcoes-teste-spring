@@ -1,10 +1,14 @@
 package com.funcoes.model;
 
-import jakarta.validation.constraints.NotBlank;
+import lombok.*;
 
-public record AbrirContaRequest(
-        @NotBlank String nomeCliente,
-        @NotBlank String cpf,
-        @NotBlank String tipoConta
-) {
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@ToString
+public class AbrirContaRequest {
+    private String nomeCliente;
+    private String cpf;
+    private String tipoConta;
 }

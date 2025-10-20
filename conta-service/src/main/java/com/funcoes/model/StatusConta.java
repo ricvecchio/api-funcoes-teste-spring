@@ -1,7 +1,11 @@
 package com.funcoes.model;
 
+/**
+ * Enum que representa os possíveis estados de uma conta.
+ */
 public enum StatusConta {
-    PENDENTE,
-    ABERTA,
-    FALHA
+    ATIVA,
+    INATIVA,
+    BLOQUEADA,
+    ENCERRADA
 }
