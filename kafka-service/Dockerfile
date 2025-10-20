@@ -1,10 +1,13 @@
+# Etapa final - executa o JAR do serviço de Kafka
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Copia o JAR já compilado pelo workflow
+# Copia o artefato gerado pelo Maven
 COPY target/*.jar app.jar
 
-EXPOSE 8080
+# Porta interna do container
+EXPOSE 8082
 
+# Executa o serviço
 ENTRYPOINT ["java", "-jar", "app.jar"]

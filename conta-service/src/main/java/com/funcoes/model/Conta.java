@@ -1,53 +1,31 @@
 package com.funcoes.model;
 
 import jakarta.persistence.*;
+import lombok.*;
 
 @Entity
+@Table(name = "contas")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Conta {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long idConta;
+    @Column(name = "id_conta")
+    @EqualsAndHashCode.Include
+    private Long id;
 
+    @Column(name = "tipo_conta")
     private String tipo;
 
     @Enumerated(EnumType.STRING)
-    private StatusConta status;
+    @Column(name = "status_conta", nullable = false)
+    private StatusConta status = StatusConta.ATIVA;
 
     @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "cliente_id")
-    private Cliente cliente; // Cliente dono da conta
-
-    public Long getIdConta() {
-        return idConta;
-    }
-
-    public void setIdConta(Long idConta) {
-        this.idConta = idConta;
-    }
-
-    public String getTipo() {
-        return tipo;
-    }
-
-    public void setTipo(String tipo) {
-        this.tipo = tipo;
-    }
-
-    public Cliente getCliente() {
-        return cliente;
-    }
-
-    public void setCliente(Cliente cliente) {
-        this.cliente = cliente;
-    }
-
-    public StatusConta getStatus() {
-        return status;
-    }
-
-    public void setStatus(StatusConta status) {
-        this.status = status;
-    }
-
+    @JoinColumn(name = "id_cliente", nullable = false)
+    private Cliente cliente;
 }

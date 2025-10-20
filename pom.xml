@@ -3,32 +3,34 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
          https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Projeto raiz -->
     <groupId>com.funcoes</groupId>
     <artifactId>api-funcoes-teste-spring</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
-    <name>API Funcoes Teste Spring</name>
-    <description>Microserviços para teste de funções</description>
+    <name>API Funções Teste Spring</name>
+    <description>Monorepo com microserviços Conta e Kafka integrados via Docker</description>
 
     <properties>
         <java.version>21</java.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <spring-boot.version>3.3.4</spring-boot.version>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.2.0</spring-boot.version>
     </properties>
 
+    <!-- Módulos -->
     <modules>
         <module>conta-service</module>
         <module>kafka-service</module>
     </modules>
 
+    <!-- Gerenciamento de dependências -->
     <dependencyManagement>
         <dependencies>
-            <!-- Importa o BOM do Spring Boot -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -39,6 +41,7 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- Plugins padrão -->
     <build>
         <pluginManagement>
             <plugins>
@@ -49,36 +52,18 @@
                     <version>${spring-boot.version}</version>
                 </plugin>
 
-                <!-- Plugin do compilador Maven -->
+                <!-- Plugin do compilador -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.13.0</version>
                     <configuration>
-                        <source>${java.version}</source>
-                        <target>${java.version}</target>
                         <release>${java.version}</release>
                         <encoding>UTF-8</encoding>
-                        <annotationProcessorPaths>
-                            <path>
-                                <groupId>org.projectlombok</groupId>
-                                <artifactId>lombok</artifactId>
-                                <version>1.18.32</version>
-                            </path>
-                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
     </build>
-
-    <repositories>
-        <!-- Repositório Maven Central -->
-        <repository>
-            <id>central</id>
-            <name>Maven Central Repository</name>
-            <url>https://repo1.maven.org/maven2/</url>
-        </repository>
-    </repositories>
 
 </project>

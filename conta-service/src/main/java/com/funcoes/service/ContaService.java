@@ -1,48 +1,60 @@
 package com.funcoes.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.funcoes.model.AbrirContaRequest;
-import com.funcoes.model.Cliente;
-import com.funcoes.model.Conta;
-import com.funcoes.model.StatusConta;
-import com.funcoes.repository.ClienteRepository;
-import com.funcoes.repository.ContaRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
+/**
+ * Serviço responsável por processar a abertura de contas e enviar os dados
+ * para o tópico Kafka definido em application.yml ou .env.
+ * <p>
+ * Esta classe aplica boas práticas como:
+ * - Limpeza do CPF (removendo caracteres não numéricos);
+ * - Logging informativo;
+ * - Tratamento robusto de exceções;
+ * - Injeção de dependências via construtor.
+ */
 @Service
-@Slf4j
-@RequiredArgsConstructor
 public class ContaService {
 
-    private final ClienteRepository clienteRepository;
-    private final ContaRepository contaRepository;
-    @Autowired(required = false)
-    private final KafkaTemplate<String, Conta> kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
 
-    @Transactional
+    // Nome do tópico definido nas configurações
+    @Value("${conta.aberturas.topic}")
+    private String contaAberturasTopic;
+
+    public ContaService(KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Publica uma solicitação de abertura de conta no tópico Kafka.
+     *
+     * @param request objeto contendo os dados da conta a ser aberta
+     */
     public void abrirConta(AbrirContaRequest request) {
-        Cliente cliente = clienteRepository.findByCpf(request.cpf())
-                .orElseGet(() -> clienteRepository.save(new Cliente(request.nomeCliente(), request.cpf())));
+        try {
+            // 🧹 Limpa o CPF antes de enviar (mantém apenas números)
+            if (request.getCpf() != null) {
+                request.setCpf(request.getCpf().replaceAll("\\D", ""));
+            }
 
-        Conta conta = new Conta();
-        conta.setCliente(cliente);
-        conta.setTipo(request.tipoConta());
-        conta.setStatus(StatusConta.PENDENTE);
+            // Converte o objeto para JSON
+            String payload = objectMapper.writeValueAsString(request);
 
-        contaRepository.save(conta);
+            // Publica no tópico Kafka
+            kafkaTemplate.send(contaAberturasTopic, request.getCpf(), payload);
 
-        kafkaTemplate.send("conta-a-abrir", conta);
+            System.out.printf("✅ [ContaService] Mensagem enviada ao tópico [%s]: key=%s value=%s%n",
+                    contaAberturasTopic, request.getCpf(), payload);
+
+        } catch (Exception e) {
+            System.err.printf("❌ [ContaService] Erro ao publicar mensagem Kafka: %s%n", e.getMessage());
+            throw new RuntimeException("Erro ao publicar mensagem Kafka", e);
+        }
     }
-
-    @Transactional(readOnly = true)
-    public List<Conta> listarContas() {
-        return contaRepository.findAll();
-    }
-
 }

@@ -1,29 +1,39 @@
 package com.funcoes.controller;
 
 import com.funcoes.model.AbrirContaRequest;
-import com.funcoes.model.Conta;
 import com.funcoes.service.ContaService;
-import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/contas")
-@RequiredArgsConstructor
 public class ContaController {
+
     private final ContaService contaService;
 
+    public ContaController(ContaService contaService) {
+        this.contaService = contaService;
+    }
+
     @PostMapping("/abrir")
-    public ResponseEntity<String> abrirConta(@RequestBody AbrirContaRequest request) {
+    public ResponseEntity<Map<String, String>> abrirConta(@Valid @RequestBody AbrirContaRequest request) {
         contaService.abrirConta(request);
-        return ResponseEntity.ok("Solicitação de abertura de conta processada!");
-    }
 
-    @GetMapping
-    public ResponseEntity<List<Conta>> listarContas() {
-        return ResponseEntity.ok(contaService.listarContas());
-    }
+        Map<String, String> response = new HashMap<>();
+        response.put("mensagem", "✅ Solicitação de abertura de conta processada!");
+        response.put("status", "ACCEPTED");
+        response.put("timestamp", Instant.now().toString());
 
+        return ResponseEntity
+                .accepted()
+                .body(response);
+    }
 }
