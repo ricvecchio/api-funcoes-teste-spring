@@ -13,7 +13,7 @@ jobs:
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
       INFRA_PATH: ./infra
-      ENV_FILE_DEV: ./infra/.env
+      ENV_FILE_DEV: .env   # já dentro da pasta infra ao mudar o working-directory
 
     steps:
       - uses: actions/checkout@v3
@@ -28,7 +28,6 @@ jobs:
       # =========================
       # Build Maven - Projeto Raiz
       # =========================
-      # Isso garante que logging-lib seja instalado localmente (mvn install)
       - name: Build all modules (root pom)
         working-directory: .
         run: mvn -B clean install -DskipTests
@@ -37,4 +36,5 @@ jobs:
       # Build Docker Compose
       # =========================
       - name: 🐳 Build Docker Compose
-        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
+        working-directory: infra
+        run: docker compose --env-file .env build --progress=plain
