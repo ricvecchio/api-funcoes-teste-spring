@@ -1,6 +1,6 @@
-package com.funcoes.consumer;
+package com.kafka.consumer;
 
-import com.funcoes.util.KafkaLogger;
+import com.kafka.util.KafkaLogger;
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;

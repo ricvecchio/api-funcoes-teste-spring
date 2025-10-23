@@ -1,4 +1,4 @@
-package com.funcoes.util;
+package com.kafka.util;
 
 import com.funcoes.logging.LogClient;
 import lombok.RequiredArgsConstructor;

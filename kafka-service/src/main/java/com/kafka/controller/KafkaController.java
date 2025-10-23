@@ -1,7 +1,7 @@
-package com.funcoes.controller;
+package com.kafka.controller;
 
 import com.funcoes.logging.LogClient;
-import com.funcoes.service.KafkaService;
+import com.kafka.service.KafkaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/contas")
 @RequiredArgsConstructor
-public class ContaController {
+public class KafkaController {
 
     private final KafkaService kafkaService;
     private final LogClient logClient;

@@ -1,7 +1,7 @@
-package com.funcoes.service;
+package com.kafka.service;
 
 import com.funcoes.logging.LogClient;
-import com.funcoes.producer.KafkaProducer;
+import com.kafka.producer.KafkaProducer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
