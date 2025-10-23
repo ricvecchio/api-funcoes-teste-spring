@@ -1,4 +1,4 @@
-package com.funcoes.model;
+package com.conta.model;
 
 /**
  * Enum que representa os possíveis estados de uma conta.

@@ -1,4 +1,4 @@
-package com.funcoes.controller;
+package com.conta.controller;
 
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;

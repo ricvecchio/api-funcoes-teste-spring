@@ -1,4 +1,4 @@
-package com.funcoes.model;
+package com.conta.model;
 
 import jakarta.persistence.*;
 import lombok.*;

@@ -1,10 +1,10 @@
-package com.funcoes.service;
+package com.conta.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.funcoes.logging.CorrelationId;
 import com.funcoes.logging.CorrelationIdFilter;
 import com.funcoes.logging.LogClient;
-import com.funcoes.dto.AbrirContaRequest;
+import com.conta.dto.AbrirContaRequest;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.beans.factory.annotation.Value;

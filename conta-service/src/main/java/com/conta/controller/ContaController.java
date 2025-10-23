@@ -1,7 +1,7 @@
-package com.funcoes.controller;
+package com.conta.controller;
 
-import com.funcoes.dto.AbrirContaRequest;
-import com.funcoes.service.ContaService;
+import com.conta.dto.AbrirContaRequest;
+import com.conta.service.ContaService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

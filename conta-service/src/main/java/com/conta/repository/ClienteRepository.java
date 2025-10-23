@@ -1,6 +1,6 @@
-package com.funcoes.repository;
+package com.conta.repository;
 
-import com.funcoes.model.Cliente;
+import com.conta.model.Cliente;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

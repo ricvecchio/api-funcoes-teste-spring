@@ -1,4 +1,4 @@
-package com.funcoes.dto;
+package com.conta.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

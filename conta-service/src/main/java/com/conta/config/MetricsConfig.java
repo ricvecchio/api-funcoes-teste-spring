@@ -1,4 +1,4 @@
-package com.funcoes.config;
+package com.conta.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
