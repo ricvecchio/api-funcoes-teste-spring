@@ -12,6 +12,9 @@ import org.springframework.kafka.core.ProducerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * ✅ Configura o producer Kafka.
+ */
 @Configuration
 public class KafkaProducerConfig {
 
@@ -20,14 +23,11 @@ public class KafkaProducerConfig {
 
     @Bean
     public ProducerFactory<String, String> producerFactory() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(ProducerConfig.ACKS_CONFIG, "all");
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.RETRIES_CONFIG, 3);
-        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 15000);
-        return new DefaultKafkaProducerFactory<>(props);
+        Map<String, Object> config = new HashMap<>();
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        return new DefaultKafkaProducerFactory<>(config);
     }
 
     @Bean

@@ -50,6 +50,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-datadog</artifactId>
+        </dependency>
+
+        <!-- logging  -->
+        <dependency>
+            <groupId>com.funcoes</groupId>
+            <artifactId>logging-lib</artifactId>
+            <version>1.0.0</version>
+        </dependency>
 
         <!-- Lombok (somente em build) -->
         <dependency>

@@ -26,6 +26,8 @@
     <modules>
         <module>conta-service</module>
         <module>kafka-service</module>
+        <module>log-service</module>
+        <module>logging-lib</module>
     </modules>
 
     <!-- Gerenciamento de dependências -->

@@ -1,20 +1,20 @@
 package com.funcoes.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.funcoes.model.AbrirContaRequest;
-import com.funcoes.model.Cliente;
-import com.funcoes.model.Conta;
-import com.funcoes.model.StatusConta;
-import com.funcoes.repository.ClienteRepository;
-import com.funcoes.repository.ContaRepository;
+import com.funcoes.logging.CorrelationId;
+import com.funcoes.logging.CorrelationIdFilter;
+import com.funcoes.logging.LogClient;
+import com.funcoes.model.*;
+import com.funcoes.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
-/**
- * Consumer responsável por processar mensagens Kafka de abertura de contas.
- * Simula o fluxo real de criação de cliente e conta, e permite testes de falha.
- */
+import java.nio.charset.StandardCharsets;
+
 @Component
 @RequiredArgsConstructor
 public class ContaConsumer {
@@ -22,48 +22,49 @@ public class ContaConsumer {
     private final ObjectMapper objectMapper;
     private final ClienteRepository clienteRepository;
     private final ContaRepository contaRepository;
+    private final LogClient log;
 
-    /**
-     * Consome mensagens do tópico Kafka de abertura de contas.
-     * Caso o CPF seja "00000000000", simula uma falha de processamento para teste de retry.
-     */
+    @Value("${conta.aberturas.topic}")
+    private String topic;
+
     @KafkaListener(topics = "${conta.aberturas.topic}", groupId = "kafka-service")
-    public void consume(String message) {
+    public void consume(ConsumerRecord<String, String> record) {
         try {
-            // 🎯 Converte o payload JSON recebido em objeto de requisição
-            AbrirContaRequest request = objectMapper.readValue(message, AbrirContaRequest.class);
+            String message = record.value();
+            String key = record.key();
 
-            // 🧹 Normaliza o CPF (mantém apenas números)
-            String cpfLimpo = request.getCpf().replaceAll("\\D", "");
-
-            // ⚠️ Cenário 3: Simulação de falha no processamento (teste de retry)
-            if ("00000000000".equals(cpfLimpo)) {
-                throw new RuntimeException("Simulando falha no processamento para o CPF 00000000000");
+            // lê traceId do header Kafka e coloca no contexto
+            Header h = record.headers().lastHeader(CorrelationIdFilter.TRACE_HEADER);
+            if (h != null) {
+                String traceId = new String(h.value(), StandardCharsets.UTF_8);
+                CorrelationId.setId(traceId);
             }
 
-            // 🔍 Busca cliente existente ou cria um novo
-            Cliente cliente = clienteRepository.findByCpf(cpfLimpo)
+            log.consume("KafkaService", topic, "Mensagem recebida: key=" + key + " value=" + message);
+
+            AbrirContaRequest request = objectMapper.readValue(message, AbrirContaRequest.class);
+            String cpf = request.getCpf().replaceAll("\\D", "");
+
+            Cliente cliente = clienteRepository.findByCpf(cpf)
                     .orElseGet(() -> {
                         Cliente novo = new Cliente();
                         novo.setNome(request.getNomeCliente());
-                        novo.setCpf(cpfLimpo);
+                        novo.setCpf(cpf);
                         return clienteRepository.save(novo);
                     });
 
-            // 💾 Cria nova conta vinculada ao cliente
             Conta conta = new Conta();
             conta.setTipo(request.getTipoConta());
             conta.setStatus(StatusConta.ATIVA);
             conta.setCliente(cliente);
-
             contaRepository.save(conta);
 
-            System.out.printf("✅ Conta criada para o cliente %s (%s)%n", cliente.getNome(), cliente.getCpf());
+            log.success("KafkaService", topic, cpf, "Conta criada com sucesso para " + cliente.getNome());
 
         } catch (Exception e) {
-            System.err.printf("❌ Erro ao processar mensagem Kafka: %s%n", e.getMessage());
-            // Se necessário, rethrow para permitir retry controlado:
-            // throw e;
+            log.error("KafkaService", topic, "Erro ao processar mensagem Kafka: " + e.getMessage());
+        } finally {
+            CorrelationId.clear();
         }
     }
 }

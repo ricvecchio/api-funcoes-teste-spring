@@ -12,12 +12,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - app-network
+    ports: [ "5432:5432" ]
+    volumes: [ pgdata:/var/lib/postgresql/data ]
+    networks: [ app-network ]
 
   # =========================
   # Zookeeper
@@ -29,10 +26,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    networks:
-      - app-network
+    ports: [ "2181:2181" ]
+    networks: [ app-network ]
 
   # =========================
   # Kafka Broker
@@ -41,17 +36,29 @@ services:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-broker
     restart: always
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
+    depends_on: [ zookeeper ]
+    ports: [ "9092:9092" ]
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    networks:
-      - app-network
+    networks: [ app-network ]
+
+  # =========================
+  # Log Service (centralizador)
+  # =========================
+  log-service:
+    build:
+      context: ../log-service
+      dockerfile: ../log-service/Dockerfile
+    container_name: log-service
+    restart: always
+    ports: [ "8083:8083" ]
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+    networks: [ app-network ]
 
   # =========================
   # Conta Service
@@ -62,14 +69,18 @@ services:
       dockerfile: ../conta-service/Dockerfile
     container_name: conta-service
     restart: always
-    ports:
-      - "8081:8081"
+    ports: [ "8081:8081" ]
     env_file: .env
-    depends_on:
-      - postgres-db
-      - kafka-broker
-    networks:
-      - app-network
+    environment:
+      LOG_SERVICE_URL: http://log-service:8083/api/logs
+      DD_ENV: ${DD_ENV}
+      DD_SERVICE: conta-service
+      DD_VERSION: ${DD_VERSION}
+      DATADOG_ENABLED: ${DATADOG_ENABLED}
+      DATADOG_API_KEY: ${DATADOG_API_KEY}
+      DATADOG_SITE: ${DATADOG_SITE}
+    depends_on: [ postgres-db, kafka-broker, log-service ]
+    networks: [ app-network ]
 
   # =========================
   # Kafka Service
@@ -80,16 +91,19 @@ services:
       dockerfile: ../kafka-service/Dockerfile
     container_name: kafka-service
     restart: always
-    ports:
-      - "8082:8082"
+    ports: [ "8082:8082" ]
     env_file: .env
     environment:
       SPRING_PROFILES_ACTIVE: dev
-    depends_on:
-      - postgres-db
-      - kafka-broker
-    networks:
-      - app-network
+      LOG_SERVICE_URL: http://log-service:8083/api/logs
+      DD_ENV: ${DD_ENV}
+      DD_SERVICE: kafka-service
+      DD_VERSION: ${DD_VERSION}
+      DATADOG_ENABLED: ${DATADOG_ENABLED}
+      DATADOG_API_KEY: ${DATADOG_API_KEY}
+      DATADOG_SITE: ${DATADOG_SITE}
+    depends_on: [ postgres-db, kafka-broker, log-service ]
+    networks: [ app-network ]
 
   # =========================
   # Inicializador de tópicos Kafka
@@ -97,8 +111,7 @@ services:
   kafka-init:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka-init
-    depends_on:
-      - kafka-broker
+    depends_on: [ kafka-broker ]
     entrypoint: ["/bin/bash", "-c"]
     command: >
       echo "⏳ Aguardando Kafka iniciar...";
@@ -109,8 +122,7 @@ services:
         --replication-factor 1
         --partitions 1
         --topic ${KAFKA_TOPIC_CONTAS_ABRIR} || echo "Tópico já existe";
-    networks:
-      - app-network
+    networks: [ app-network ]
 
 networks:
   app-network:

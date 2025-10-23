@@ -3,12 +3,10 @@ package com.funcoes.config;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.*;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
-import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,11 +15,8 @@ import java.util.Map;
 @Configuration
 public class KafkaConsumerConfig {
 
-    @Value("${spring.kafka.bootstrap-servers}")
-    private String bootstrapServers;
-
-    @Value("${spring.kafka.consumer.group-id}")
-    private String groupId;
+    @Value("${spring.kafka.bootstrap-servers}") private String bootstrapServers;
+    @Value("${spring.kafka.consumer.group-id}") private String groupId;
 
     @Bean
     public ConsumerFactory<String, String> consumerFactory() {

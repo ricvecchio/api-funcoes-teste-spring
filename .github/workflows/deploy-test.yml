@@ -24,12 +24,25 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # =========================
+      # Maven build - conta-service
+      # =========================
       - name: Build Maven conta-service
         working-directory: ./conta-service
         run: mvn clean package -DskipTests
 
+      # =========================
+      # Maven build - kafka-service
+      # =========================
       - name: Build Maven kafka-service
         working-directory: ./kafka-service
+        run: mvn clean package -DskipTests
+
+      # =========================
+      # Maven build - log-service
+      # =========================
+      - name: Build Maven log-service
+        working-directory: ./log-service
         run: mvn clean package -DskipTests
 
       - name: 🐳 Build Docker Compose

@@ -13,10 +13,10 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>conta-service</artifactId>
+    <artifactId>log-service</artifactId>
     <packaging>jar</packaging>
-    <name>Conta Service</name>
-    <description>Serviço de gestão de contas</description>
+    <name>Log Service</name>
+    <description>Serviço de gestão de logs</description>
 
     <dependencies>
         <!-- Spring Boot Web + JPA + Validação -->
@@ -44,18 +44,18 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
         </dependency>
+
+        <!-- Monitoramento e métricas -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
-
-        <!-- Monitoramento e métricas -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-datadog</artifactId>
         </dependency>
 
-        <!-- logging  -->
+        <!-- Logs -->
         <dependency>
             <groupId>com.funcoes</groupId>
             <artifactId>logging-lib</artifactId>

@@ -1,49 +1,42 @@
 package com.funcoes.controller;
 
+import com.funcoes.logging.LogClient;
 import com.funcoes.model.Conta;
 import com.funcoes.repository.ContaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Controller responsável por expor endpoints REST de leitura das contas.
- * Esse controller pertence ao kafka-service, pois é o serviço que mantém os dados.
- */
 @RestController
 @RequestMapping("/api/contas")
 @RequiredArgsConstructor
 public class ContaController {
 
     private final ContaRepository contaRepository;
+    private final LogClient log;
 
-    /**
-     * Retorna todas as contas cadastradas no banco.
-     */
+    private static final String SERVICE_NAME = "KafkaService";
+    private static final String TOPIC_NAME = "conta-aberturas";
+
     @GetMapping
     public ResponseEntity<List<Conta>> listarContas() {
-        List<Conta> contas = contaRepository.findAll();
-        if (contas.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(contas);
-    }
+        log.info(SERVICE_NAME, TOPIC_NAME, "Recebida requisição para listar contas.");
+        try {
+            List<Conta> contas = contaRepository.findAll();
 
-    /**
-     * Retorna as contas de um cliente específico, filtrando pelo CPF.
-     */
-    @GetMapping("/cliente/{cpf}")
-    public ResponseEntity<List<Conta>> listarPorCpf(@PathVariable String cpf) {
-        String cpfLimpo = cpf.replaceAll("\\D", "");
-        List<Conta> contas = contaRepository.findByClienteCpf(cpfLimpo);
-        if (contas.isEmpty()) {
-            return ResponseEntity.noContent().build();
+            if (contas.isEmpty()) {
+                log.warn(SERVICE_NAME, TOPIC_NAME, "Nenhuma conta encontrada no banco de dados.");
+                return ResponseEntity.noContent().build();
+            }
+
+            log.success(SERVICE_NAME, TOPIC_NAME, "LIST_CONTAS", "Listagem retornada com " + contas.size() + " conta(s).");
+            return ResponseEntity.ok(contas);
+
+        } catch (Exception e) {
+            log.error(SERVICE_NAME, TOPIC_NAME, "Erro ao listar contas: " + e.getMessage());
+            return ResponseEntity.internalServerError().build();
         }
-        return ResponseEntity.ok(contas);
     }
 }
