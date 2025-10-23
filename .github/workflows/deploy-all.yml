@@ -26,6 +26,10 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Build Maven logging-lib
+        working-directory: ./logging-lib
+        run: mvn clean install -DskipTests
+
       - name: Build Maven conta-service
         working-directory: ./conta-service
         run: mvn clean package -DskipTests
