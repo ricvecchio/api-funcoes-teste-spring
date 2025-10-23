@@ -38,6 +38,10 @@ jobs:
         working-directory: ./kafka-service
         run: mvn clean package -DskipTests
 
+      - name: Build Maven log-service
+        working-directory: ./log-service
+        run: mvn clean package -DskipTests
+
       - name: 🐳 Build Docker Compose
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
