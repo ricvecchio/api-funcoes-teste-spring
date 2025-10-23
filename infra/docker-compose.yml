@@ -61,7 +61,7 @@ services:
   # =========================
   log-service:
     build:
-      context: ../api-funcoes-teste-spring/log-service
+      context: ../log-service
       dockerfile: Dockerfile
     container_name: log-service
     restart: always
@@ -79,7 +79,7 @@ services:
   # =========================
   conta-service:
     build:
-      context: ../api-funcoes-teste-spring/conta-service
+      context: ../conta-service
       dockerfile: Dockerfile
     container_name: conta-service
     restart: always
@@ -109,7 +109,7 @@ services:
   # =========================
   kafka-service:
     build:
-      context: ../api-funcoes-teste-spring/kafka-service
+      context: ../kafka-service
       dockerfile: Dockerfile
     container_name: kafka-service
     restart: always
