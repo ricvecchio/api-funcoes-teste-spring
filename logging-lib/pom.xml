@@ -12,6 +12,8 @@
 
     <artifactId>logging-lib</artifactId>
     <packaging>jar</packaging>
+    <name>Logging Lib</name>
+    <description>Biblioteca compartilhada para observabilidade e logging</description>
 
     <dependencies>
         <!-- Spring Boot básico (para usar contextos, logs, etc) -->

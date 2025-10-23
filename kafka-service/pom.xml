@@ -13,6 +13,8 @@
 
     <artifactId>kafka-service</artifactId>
     <packaging>jar</packaging>
+    <name>Kafka Service</name>
+    <description>Serviço responsável por eventos Kafka</description>
 
     <dependencies>
         <!-- Spring Boot Starter -->
