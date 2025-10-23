@@ -10,10 +10,10 @@
         <version>1.0.0</version>
     </parent>
 
+    <groupId>com.funcoes</groupId>
     <artifactId>logging-lib</artifactId>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
-    <name>Logging Lib</name>
-    <description>Biblioteca compartilhada para observabilidade e logging</description>
 
     <dependencies>
         <!-- Spring Boot básico (para usar contextos, logs, etc) -->
