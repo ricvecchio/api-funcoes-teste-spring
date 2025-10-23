@@ -6,16 +6,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Representa uma entrada de log padronizada compartilhada entre os serviços.
+ * Representa uma entrada de log que será enviada para o Log Service.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class LogEntry {
-    private String timestamp;  // Data/hora do evento
-    private String origem;     // Serviço ou componente de origem
-    private String acao;       // Ação executada
-    private String nivel;      // INFO, WARN, ERROR, etc.
-    private String mensagem;   // Descrição detalhada
+
+    private String origem;
+    private String acao;
+    private String nivel;
+    private String mensagem;
 }
