@@ -1,4 +1,4 @@
-package com.funcoes.model;
+package com.funcoes.dto;
 
 import lombok.*;
 

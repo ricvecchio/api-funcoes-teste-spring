@@ -1,6 +1,6 @@
 package com.funcoes.controller;
 
-import com.funcoes.model.AbrirContaRequest;
+import com.funcoes.dto.AbrirContaRequest;
 import com.funcoes.service.ContaService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
