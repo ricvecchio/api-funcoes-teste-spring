@@ -1,21 +1,18 @@
 package com.funcoes.logging;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 /**
- * Representa uma entrada de log que será enviada para o Log Service.
+ * Representa uma entrada de log estruturada.
  */
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class LogEntry {
-
-    private String origem;
-    private String acao;
-    private String nivel;
-    private String mensagem;
+    private String serviceName;    // Nome do serviço (ex: conta-service, kafka-service)
+    private String topicName;      // Nome do tópico (se aplicável)
+    private String action;         // Ação (ex: CREATE, UPDATE, DELETE, etc.)
+    private String level;          // Nível de log (INFO, WARN, ERROR, SUCCESS)
+    private String message;        // Mensagem principal do log
+    private String timestamp;      // 🕒 Timestamp do evento (gerado pelo LogClient)
 }
