@@ -57,12 +57,12 @@ services:
       - app-network
 
   # =========================
-  # Log Service (centralizador)
+  # Log Service
   # =========================
   log-service:
     build:
-      context: ../log-service
-      dockerfile: ../log-service/Dockerfile
+      context: ../api-funcoes-teste-spring/log-service
+      dockerfile: ../api-funcoes-teste-spring/log-service/Dockerfile
     container_name: log-service
     restart: always
     ports:
@@ -79,8 +79,8 @@ services:
   # =========================
   conta-service:
     build:
-      context: ../conta-service
-      dockerfile: ../conta-service/Dockerfile
+      context: ../api-funcoes-teste-spring/conta-service
+      dockerfile: ../api-funcoes-teste-spring/conta-service/Dockerfile
     container_name: conta-service
     restart: always
     ports:
@@ -109,8 +109,8 @@ services:
   # =========================
   kafka-service:
     build:
-      context: ../kafka-service
-      dockerfile: ../kafka-service/Dockerfile
+      context: ../api-funcoes-teste-spring/kafka-service
+      dockerfile: ../api-funcoes-teste-spring/kafka-service/Dockerfile
     container_name: kafka-service
     restart: always
     ports:
