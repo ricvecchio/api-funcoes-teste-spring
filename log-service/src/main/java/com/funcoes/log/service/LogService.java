@@ -1,7 +1,7 @@
-package com.funcoes.service;
+package com.funcoes.log.service;
 
 import com.funcoes.logging.LogEntry;
-import com.funcoes.util.LogFormatter;
+import com.funcoes.log.util.LogFormatter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 

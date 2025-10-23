@@ -1,4 +1,4 @@
-package com.funcoes.config;
+package com.funcoes.log.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Configuration;

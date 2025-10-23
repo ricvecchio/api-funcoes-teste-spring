@@ -1,4 +1,4 @@
-package com.funcoes.controller;
+package com.funcoes.log.controller;
 
 import com.funcoes.logging.LogClient;
 import lombok.RequiredArgsConstructor;

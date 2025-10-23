@@ -1,4 +1,4 @@
-package com.funcoes.config;
+package com.funcoes.log.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

@@ -1,4 +1,4 @@
-package com.funcoes.util;
+package com.funcoes.log.util;
 
 import com.funcoes.logging.LogEntry;
 import lombok.experimental.UtilityClass;

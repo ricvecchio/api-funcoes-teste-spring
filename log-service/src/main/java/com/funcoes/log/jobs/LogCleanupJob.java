@@ -1,6 +1,6 @@
-package com.funcoes.jobs;
+package com.funcoes.log.jobs;
 
-import com.funcoes.service.LogService;
+import com.funcoes.log.service.LogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
