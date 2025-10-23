@@ -23,27 +23,18 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: maven
 
       # =========================
-      # Maven build - conta-service
+      # Build Maven - Projeto Raiz
       # =========================
-      - name: Build Maven conta-service
-        working-directory: ./conta-service
-        run: mvn clean package -DskipTests
+      # Isso garante que logging-lib seja instalado localmente (mvn install)
+      - name: Build all modules (root pom)
+        working-directory: .
+        run: mvn -B clean install -DskipTests
 
       # =========================
-      # Maven build - kafka-service
+      # Build Docker Compose
       # =========================
-      - name: Build Maven kafka-service
-        working-directory: ./kafka-service
-        run: mvn clean package -DskipTests
-
-      # =========================
-      # Maven build - log-service
-      # =========================
-      - name: Build Maven log-service
-        working-directory: ./log-service
-        run: mvn clean package -DskipTests
-
       - name: 🐳 Build Docker Compose
         run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
