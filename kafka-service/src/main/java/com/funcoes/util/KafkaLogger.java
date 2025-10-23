@@ -5,8 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * Utilitário simples para registrar logs específicos de Kafka
- * (pode ser usado em produtores ou consumidores).
+ * Classe utilitária central de logs para o módulo kafka-service.
+ * Usa o LogClient da logging-lib para registrar logs padronizados.
  */
 @Component
 @RequiredArgsConstructor
@@ -14,11 +14,33 @@ public class KafkaLogger {
 
     private final LogClient logClient;
 
-    public void logInfo(String origem, String mensagem) {
-        logClient.info("KafkaService", origem, mensagem);
+    private static final String SERVICE_NAME = "kafka-service";
+
+    /**
+     * Loga uma mensagem informativa.
+     */
+    public void info(String action, String message) {
+        logClient.info(SERVICE_NAME, action, message);
     }
 
-    public void logError(String origem, String mensagem, Exception e) {
-        logClient.error("KafkaService", origem, mensagem, e);
+    /**
+     * Loga sucesso de uma operação.
+     */
+    public void success(String action, String resource, String message) {
+        logClient.success(SERVICE_NAME, action, resource, message);
+    }
+
+    /**
+     * Loga erro simples.
+     */
+    public void error(String action, String message) {
+        logClient.error(SERVICE_NAME, action, message);
+    }
+
+    /**
+     * Loga erro com exceção.
+     */
+    public void error(String action, String message, Exception e) {
+        logClient.error(SERVICE_NAME, action, message, e);
     }
 }

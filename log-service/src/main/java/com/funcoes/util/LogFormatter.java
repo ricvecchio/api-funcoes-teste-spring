@@ -1,25 +1,23 @@
 package com.funcoes.util;
 
 import com.funcoes.logging.LogEntry;
-import org.springframework.stereotype.Component;
+import lombok.experimental.UtilityClass;
+
+import java.time.format.DateTimeFormatter;
 
 /**
- * Responsável por formatar logs em texto legível para exibição ou persistência.
+ * Utilitário responsável por formatar logs em uma string legível.
  */
-@Component
+@UtilityClass
 public class LogFormatter {
 
-    public String format(LogEntry entry) {
-        if (entry == null) {
-            return "[LogEntry: null]";
-        }
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        return String.format(
-                "[%s] Service: %s | Level: %s | Message: %s",
-                entry.getTimestamp(),
-                entry.getService(),
-                entry.getLevel(),
-                entry.getMessage()
-        );
+    public static String format(LogEntry entry) {
+        return String.format("[%s] [%s] [%s] %s",
+                entry.getTimestamp().format(FORMATTER),
+                entry.getServiceName(),
+                entry.getAction(),
+                entry.getMessage());
     }
 }

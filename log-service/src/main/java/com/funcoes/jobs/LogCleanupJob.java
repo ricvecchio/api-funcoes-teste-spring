@@ -1,28 +1,31 @@
 package com.funcoes.jobs;
 
 import com.funcoes.service.LogService;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+/**
+ * Job agendado que limpa logs antigos periodicamente.
+ */
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class LogCleanupJob {
 
     private final LogService logService;
 
-    @Value("${log.retention.minutes:60}")
-    private long retentionMinutes;
-
-    public LogCleanupJob(LogService logService) {
-        this.logService = logService;
-    }
-
-    // roda a cada 1 min
-    @Scheduled(fixedDelay = 60_000)
-    public void cleanup() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(retentionMinutes);
+    /**
+     * Executa todo dia à meia-noite (00:00).
+     * Remove logs com mais de 30 dias.
+     */
+    @Scheduled(cron = "0 0 0 * * *")
+    public void cleanupOldLogs() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(30);
+        log.info("Executando limpeza de logs anteriores a {}", cutoff);
         logService.purgeOlderThan(cutoff);
     }
 }

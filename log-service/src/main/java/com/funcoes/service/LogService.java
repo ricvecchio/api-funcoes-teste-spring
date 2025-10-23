@@ -1,50 +1,61 @@
 package com.funcoes.service;
 
 import com.funcoes.logging.LogEntry;
-import io.micrometer.core.instrument.MeterRegistry;
-import org.springframework.beans.factory.annotation.Value;
+import com.funcoes.util.LogFormatter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
+/**
+ * Serviço responsável por gerenciar logs em memória.
+ * Não depende de banco de dados.
+ */
+@Slf4j
 @Service
 public class LogService {
 
     private final List<LogEntry> logs = new CopyOnWriteArrayList<>();
 
-    @Value("${log.max.entries:5000}")
-    private int maxEntries;
-
-    private final MeterRegistry meter;
-
-    public LogService(MeterRegistry meterRegistry) {
-        this.meter = meterRegistry;
-    }
-
-    public void save(LogEntry log) {
-        logs.add(log);
-        while (logs.size() > maxEntries) {
-            logs.remove(0);
-        }
-        // Métrica: contagem de logs por level
-        meter.counter("logs.ingested", "level", safe(log.getLevel()), "service", safe(log.getService())).increment();
-    }
-
-    public List<LogEntry> getAll() {
+    /**
+     * Retorna todos os logs ordenados por data decrescente.
+     */
+    public List<LogEntry> getAllLogs() {
         return logs.stream()
                 .sorted(Comparator.comparing(LogEntry::getTimestamp).reversed())
-                .toList();
+                .collect(Collectors.toList());
     }
 
-    public void clear() {
-        logs.clear();
+    /**
+     * Adiciona um novo log.
+     */
+    public void addLog(LogEntry entry) {
+        if (entry.getTimestamp() == null) {
+            entry.setTimestamp(LocalDateTime.now());
+        }
+        logs.add(entry);
+        log.info(LogFormatter.format(entry));
     }
 
-    public void purgeOlderThan(LocalDateTime cutoff) {
-        logs.removeIf(l -> l.getTimestamp().isBefore(cutoff));
+    /**
+     * Remove todos os logs anteriores à data especificada.
+     */
+    public void purgeOlderThan(LocalDateTime cutoffDate) {
+        logs.removeIf(l -> l.getTimestamp().isBefore(cutoffDate));
+        log.info("Removidos logs anteriores a {}", cutoffDate);
     }
 
-    private String safe(String s) { return s == null ? "unknown" : s; }
+    /**
+     * Filtra logs por nome de serviço e ação.
+     */
+    public List<LogEntry> findByServiceAndAction(String serviceName, String action) {
+        return logs.stream()
+                .filter(l -> l.getServiceName().equalsIgnoreCase(serviceName))
+                .filter(l -> l.getAction().equalsIgnoreCase(action))
+                .collect(Collectors.toList());
+    }
 }

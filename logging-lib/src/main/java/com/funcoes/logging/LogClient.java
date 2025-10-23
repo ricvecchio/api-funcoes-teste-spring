@@ -1,90 +1,62 @@
 package com.funcoes.logging;
 
-import java.time.Instant;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.time.LocalDateTime;
 
 /**
- * Cliente centralizado para envio de logs estruturados.
- * Pode futuramente enviar logs para o kafka-service ou log-service.
+ * Cliente de logging genérico utilizado por outros serviços.
+ * Fornece métodos convenientes para registrar logs padronizados.
  */
+@Slf4j
 @Component
 public class LogClient {
 
-    public void info(String service, String topic, String action, String message) {
-        LogEntry entry = LogEntry.builder()
-                .serviceName(service)
-                .topicName(topic)
-                .action(action)
-                .level("INFO")
-                .message(message)
-                .timestamp(Instant.now().toString())
-                .build();
-
-        send(entry);
+    /**
+     * Log de informação genérico.
+     */
+    public void info(String service, String action, String message) {
+        log.info(format("INFO", service, action, message));
     }
 
-    public void success(String service, String topic, String action, String message) {
-        LogEntry entry = LogEntry.builder()
-                .serviceName(service)
-                .topicName(topic)
-                .action(action)
-                .level("SUCCESS")
-                .message(message)
-                .timestamp(Instant.now().toString())
-                .build();
-
-        send(entry);
+    /**
+     * Log de sucesso (operação concluída).
+     */
+    public void success(String service, String action, String resource, String message) {
+        String fullMsg = String.format("Recurso: %s | %s", resource, message);
+        log.info(format("SUCCESS", service, action, fullMsg));
     }
 
-    public void error(String service, String topic, String message) {
-        LogEntry entry = LogEntry.builder()
-                .serviceName(service)
-                .topicName(topic)
-                .action("ERROR")
-                .level("ERROR")
-                .message(message)
-                .timestamp(Instant.now().toString())
-                .build();
-
-        send(entry);
+    /**
+     * Log de erro com mensagem simples.
+     */
+    public void error(String service, String action, String message) {
+        log.error(format("ERROR", service, action, message));
     }
 
-    public void error(String service, String topic, String message, Exception e) {
-        String fullMessage = message;
-        if (e != null) {
-            fullMessage += " | Exception: " + e.getClass().getSimpleName() + " - " + e.getMessage();
-        }
-
-        LogEntry entry = LogEntry.builder()
-                .serviceName(service)
-                .topicName(topic)
-                .action("ERROR")
-                .level("ERROR")
-                .message(fullMessage)
-                .timestamp(java.time.Instant.now().toString())
-                .build();
-
-        send(entry);
+    /**
+     * Log de erro com exceção.
+     */
+    public void error(String service, String action, String message, Exception e) {
+        StringWriter sw = new StringWriter();
+        e.printStackTrace(new PrintWriter(sw));
+        String stackTrace = sw.toString();
+        log.error(format("ERROR", service, action, message + " | StackTrace: " + stackTrace));
     }
 
-    private void send(LogEntry entry) {
-        // Por enquanto apenas imprime no console
-        System.out.println("[LOG] " + entry);
+    /**
+     * Monta uma linha padronizada de log.
+     */
+    private String format(String level, String service, String action, String message) {
+        return String.format("[%s] [%s] [%s] [%s] %s",
+                LocalDateTime.now(),
+                level,
+                service,
+                action,
+                message
+        );
     }
-
-    // Sobrecarga compatível com 3 parâmetros (sem 'action')
-    public void info(String service, String topic, String message) {
-        LogEntry entry = LogEntry.builder()
-                .serviceName(service)
-                .topicName(topic)
-                .action("N/A")
-                .level("INFO")
-                .message(message)
-                .timestamp(java.time.Instant.now().toString())
-                .build();
-
-        send(entry);
-    }
-
 }
