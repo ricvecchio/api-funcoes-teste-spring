@@ -1,13 +1,17 @@
 package com.funcoes.conta.controller;
 
 import com.funcoes.conta.dto.AbrirContaRequest;
+import com.funcoes.conta.model.Conta;
 import com.funcoes.conta.service.ContaService;
+import com.funcoes.conta.repository.ContaRepository;
+
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -15,9 +19,11 @@ import java.util.Map;
 public class ContaController {
 
     private final ContaService contaService;
+    private final ContaRepository contaRepository;
 
-    public ContaController(ContaService contaService) {
+    public ContaController(ContaService contaService, ContaRepository contaRepository) {
         this.contaService = contaService;
+        this.contaRepository = contaRepository;
     }
 
     @PostMapping("/abrir")
@@ -31,4 +37,14 @@ public class ContaController {
 
         return ResponseEntity.accepted().body(response);
     }
+
+    @GetMapping
+    public ResponseEntity<List<Conta>> listarContas() {
+        List<Conta> contas = contaRepository.findAll();
+        if (contas.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(contas);
+    }
+
 }

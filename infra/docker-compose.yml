@@ -62,8 +62,6 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_MESSAGE_MAX_BYTES: 2000000
     networks:
       - app-network
     healthcheck:
@@ -73,7 +71,7 @@ services:
       retries: 10
 
   # =========================
-  # Log Service
+  # 🧾 Log Service
   # =========================
   log-service:
     build:
@@ -83,12 +81,8 @@ services:
     restart: always
     env_file: .env.local
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8083
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      MANAGEMENT_DATADOG_METRICS_EXPORT_APIKEY: ${DATADOG_API_KEY}   # 👈 Integração Datadog
     ports:
       - "8083:8083"
     depends_on:
@@ -108,14 +102,9 @@ services:
     restart: always
     env_file: .env.local
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8081
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
-      LOG_SERVICE_URL: http://log-service:8083/api/logs
-      MANAGEMENT_DATADOG_METRICS_EXPORT_APIKEY: ${DATADOG_API_KEY}   # 👈 Integração Datadog
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
     ports:
       - "8081:8081"
     depends_on:
@@ -139,14 +128,14 @@ services:
     restart: always
     env_file: .env.local
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8082
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       LOG_SERVICE_URL: http://log-service:8083/api/logs
-      MANAGEMENT_DATADOG_METRICS_EXPORT_APIKEY: ${DATADOG_API_KEY}   # 👈 Integração Datadog
+      MANAGEMENT_DATADOG_METRICS_EXPORT_APIKEY: ${DATADOG_API_KEY}
     ports:
       - "8082:8082"
     depends_on:
@@ -172,12 +161,11 @@ services:
     command: >
       echo "⏳ Aguardando Kafka iniciar...";
       sleep 10;
-      echo "✅ Criando tópico: conta-topic";
       kafka-topics --create --if-not-exists \
         --bootstrap-server kafka-broker:9092 \
         --replication-factor 1 \
         --partitions 1 \
-        --topic conta-topic || echo "⚠️  Tópico já existe";
+        --topic conta-aberturas || echo "⚠️  Tópico já existe";
     networks:
       - app-network
 
