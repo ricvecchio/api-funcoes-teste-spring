@@ -1,4 +1,4 @@
-# Etapa final - executa o JAR do serviço de Kafka
+# Etapa final - executa o JAR do serviço de kafka
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
