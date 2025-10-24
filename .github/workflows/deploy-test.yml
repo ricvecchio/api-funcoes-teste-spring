@@ -13,7 +13,11 @@ jobs:
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
       INFRA_PATH: ./infra
-      ENV_FILE_DEV: ./infra/.env
+      # 🔐 Variável segura do GitHub Secrets
+      DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: funcoesdb
 
     steps:
       - uses: actions/checkout@v3
@@ -23,14 +27,18 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          cache: maven
 
-      - name: Build Maven conta-service
-        working-directory: ./conta-service
-        run: mvn clean package -DskipTests
+      # =========================
+      # Build Maven - Projeto Raiz
+      # =========================
+      - name: Build all modules (root pom)
+        working-directory: .
+        run: mvn -B clean install -DskipTests
 
-      - name: Build Maven kafka-service
-        working-directory: ./kafka-service
-        run: mvn clean package -DskipTests
-
+      # =========================
+      # Build Docker Compose
+      # =========================
       - name: 🐳 Build Docker Compose
-        run: docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
+        working-directory: infra
+        run: docker compose --env-file <(printenv) build --progress=plain
