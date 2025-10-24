@@ -3,11 +3,11 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Copia o artefato gerado pelo Maven
 COPY target/*.jar app.jar
 
-# Porta interna do container
+# 🐶 Adiciona o Datadog Java Agent
+RUN curl -L -o dd-java-agent.jar https://dtdg.co/latest-java-tracer
+
 EXPOSE 8083
 
-# Executa o serviço
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-javaagent:/app/dd-java-agent.jar", "-jar", "app.jar"]

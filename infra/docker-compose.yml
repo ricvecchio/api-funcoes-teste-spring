@@ -1,3 +1,7 @@
+# =========================
+# 🐳 Docker Compose - Infraestrutura completa
+# =========================
+# ⚠️ Removido nada, apenas adicionamos o serviço datadog-agent 🐶 e envs DD_*
 version: "3.9"
 
 services:
@@ -83,6 +87,13 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8083
+      # 🐶 Datadog APM vars
+      DD_SERVICE: log-service
+      DD_ENV: ${DD_ENV}
+      DD_VERSION: ${DD_VERSION}
+      DD_AGENT_HOST: datadog-agent
+      DD_TRACE_ENABLED: "true"
+      DD_LOGS_INJECTION: "true"
     ports:
       - "8083:8083"
     depends_on:
@@ -105,6 +116,13 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8081
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      # 🐶 Datadog APM vars
+      DD_SERVICE: conta-service
+      DD_ENV: ${DD_ENV}
+      DD_VERSION: ${DD_VERSION}
+      DD_AGENT_HOST: datadog-agent
+      DD_TRACE_ENABLED: "true"
+      DD_LOGS_INJECTION: "true"
     ports:
       - "8081:8081"
     depends_on:
@@ -136,6 +154,13 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       LOG_SERVICE_URL: http://log-service:8083/api/logs
       MANAGEMENT_DATADOG_METRICS_EXPORT_APIKEY: ${DATADOG_API_KEY}
+      # 🐶 Datadog APM vars
+      DD_SERVICE: kafka-service
+      DD_ENV: ${DD_ENV}
+      DD_VERSION: ${DD_VERSION}
+      DD_AGENT_HOST: datadog-agent
+      DD_TRACE_ENABLED: "true"
+      DD_LOGS_INJECTION: "true"
     ports:
       - "8082:8082"
     depends_on:
@@ -166,6 +191,32 @@ services:
         --replication-factor 1 \
         --partitions 1 \
         --topic conta-aberturas || echo "⚠️  Tópico já existe";
+    networks:
+      - app-network
+
+  # =========================
+  # 🐶 Datadog Agent (NOVO)
+  # =========================
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:latest
+    container_name: datadog-agent
+    restart: always
+    environment:
+      DD_API_KEY: ${DATADOG_API_KEY}
+      DD_SITE: ${DATADOG_SITE}
+      DD_ENV: ${DD_ENV}
+      DD_SERVICE: infra
+      DD_VERSION: ${DD_VERSION}
+      DD_APM_ENABLED: "true"
+      DD_LOGS_ENABLED: "true"
+      DD_PROCESS_AGENT_ENABLED: "true"
+    ports:
+      - "8126:8126" # porta padrão do agente
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
     networks:
       - app-network
 
