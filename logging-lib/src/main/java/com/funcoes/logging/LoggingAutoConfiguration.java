@@ -1,13 +1,13 @@
 package com.funcoes.logging;
 
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-/**
- * AutoConfiguração para ativar o Datadog e futuras integrações de logging.
- * Todos os microserviços que incluem o logging-lib herdam esta configuração.
- */
-@AutoConfiguration
-@Import({ DatadogConfiguration.class })
+@Configuration
 public class LoggingAutoConfiguration {
+
+    @Bean
+    public LogClient logClient() {
+        return new LogClient();
+    }
 }

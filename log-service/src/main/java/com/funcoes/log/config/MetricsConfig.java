@@ -2,13 +2,24 @@ package com.funcoes.log.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 
+/**
+ * Configuração de métricas (Micrometer + Datadog, se disponível).
+ * Esta classe é resiliente: o serviço sobe mesmo que o Datadog não esteja configurado.
+ */
 @Configuration
 public class MetricsConfig {
 
-    public MetricsConfig(MeterRegistry registry,
-                         @Value("${spring.application.name:log-service}") String appName) {
-        registry.config().commonTags("application", appName);
+    public MetricsConfig(MeterRegistry meterRegistry) {
+        if (meterRegistry != null) {
+            System.out.println("✅ Micrometer ativo: registrando métricas com " + meterRegistry.getClass().getSimpleName());
+        } else {
+            System.out.println("⚠️ Nenhum MeterRegistry disponível. Métricas desativadas (modo local).");
+        }
+    }
+
+    // Construtor alternativo para fallback quando o bean não existir
+    public MetricsConfig() {
+        System.out.println("⚠️ Nenhum MeterRegistry detectado. Executando sem métricas.");
     }
 }

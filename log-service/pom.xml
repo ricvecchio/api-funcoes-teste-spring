@@ -30,6 +30,12 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Spring Boot Actuator for health/info endpoints -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -38,19 +44,24 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Micrometer (opcional) -->
+        <!-- Micrometer (para métricas) -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
         </dependency>
 
-        <!-- Logs -->
+        <!-- Micrometer Datadog metrics exporter -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-datadog</artifactId>
+        </dependency>
+
+        <!-- Logging Lib (biblioteca compartilhada de logs) -->
         <dependency>
             <groupId>com.funcoes</groupId>
             <artifactId>logging-lib</artifactId>
             <version>1.0.0</version>
         </dependency>
-
 
         <!-- Testes -->
         <dependency>
@@ -69,6 +80,7 @@
 
     <build>
         <plugins>
+            <!-- Compilação Java -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -86,14 +98,24 @@
                 </configuration>
             </plugin>
 
+            <!-- 🚀 Spring Boot: gera o fat jar executável -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <!-- repackage é o que gera o manifest com Main-Class -->
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
-                    <skip>true</skip>
+                    <mainClass>com.funcoes.log.LogServiceApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
 </project>
