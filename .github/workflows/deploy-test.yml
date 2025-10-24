@@ -13,7 +13,7 @@ jobs:
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
       INFRA_PATH: ./infra
-      ENV_FILE_DEV: .env   # já dentro da pasta infra ao mudar o working-directory
+      ENV_FILE_DEV: .env.dev   # já dentro da pasta infra ao mudar o working-directory
 
     steps:
       - uses: actions/checkout@v3
@@ -37,4 +37,4 @@ jobs:
       # =========================
       - name: 🐳 Build Docker Compose
         working-directory: infra
-        run: docker compose --env-file .env build --progress=plain
+        run: docker compose --env-file .env.dev build --progress=plain

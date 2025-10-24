@@ -14,7 +14,8 @@ jobs:
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
       INFRA_PATH: ./infra
-      ENV_FILE_DEV: ./infra/.env
+      ENV_FILE_LOCAL: ./infra/.env.local
+      ENV_FILE_DEV: ./infra/.env.dev
       ENV_FILE_PROD: ./infra/.env.prod
 
     steps:
