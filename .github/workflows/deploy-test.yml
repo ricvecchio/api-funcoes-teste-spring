@@ -13,7 +13,11 @@ jobs:
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
       INFRA_PATH: ./infra
-      ENV_FILE_DEV: .env.dev   # já dentro da pasta infra ao mudar o working-directory
+      # 🔐 Variável segura do GitHub Secrets
+      DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: funcoesdb
 
     steps:
       - uses: actions/checkout@v3
@@ -37,4 +41,4 @@ jobs:
       # =========================
       - name: 🐳 Build Docker Compose
         working-directory: infra
-        run: docker compose --env-file .env.dev build --progress=plain
+        run: docker compose --env-file <(printenv) build --progress=plain

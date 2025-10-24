@@ -14,9 +14,13 @@ jobs:
       COMPOSE_DOCKER_CLI_BUILD: 1
       IMAGE_CACHE_DIR: /tmp/.buildx-cache
       INFRA_PATH: ./infra
-      ENV_FILE_LOCAL: ./infra/.env.local
       ENV_FILE_DEV: ./infra/.env.dev
       ENV_FILE_PROD: ./infra/.env.prod
+      # 🔐 Variável segura do GitHub Secrets
+      DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: funcoesdb
 
     steps:
       - uses: actions/checkout@v3
@@ -43,14 +47,20 @@ jobs:
         working-directory: ./log-service
         run: mvn clean package -DskipTests
 
+      # =========================
+      # 🐳 Build Docker Compose
+      # =========================
       - name: 🐳 Build Docker Compose
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-            docker compose --env-file $ENV_FILE_DEV -f $INFRA_PATH/docker-compose.yml build --progress=plain
+            docker compose --env-file <(printenv) -f $INFRA_PATH/docker-compose.yml build --progress=plain
           else
-            docker compose --env-file $ENV_FILE_PROD -f $INFRA_PATH/docker-compose.yml build --progress=plain
+            docker compose --env-file <(printenv) -f $INFRA_PATH/docker-compose.yml build --progress=plain
           fi
 
+      # =========================
+      # 📦 Deploy (simulado para main)
+      # =========================
       - name: 📦 Deploy (simulado para main)
         if: github.ref == 'refs/heads/main'
         run: |
