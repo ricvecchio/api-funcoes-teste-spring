@@ -1,4 +1,4 @@
-# Etapa final - executa o JAR do serviço de contas
+# Etapa final - executa o JAR do serviço de logs
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
