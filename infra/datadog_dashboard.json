@@ -1,0 +1,136 @@
+{
+  "title": "📊 API Funções - Microservices Dashboard",
+  "description": "Monitoramento dos microserviços conta-service, kafka-service e log-service com métricas de tráfego, erros, memória e logs recentes.",
+  "layout_type": "ordered",
+  "widgets": [
+    {
+      "definition": {
+        "title": "🚀 Requisições HTTP - Conta Service",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:trace.http.requests{service:conta-service,env:docker}.as_count()",
+            "display_type": "bars"
+          }
+        ],
+        "yaxis": {
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 6,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "title": "📦 Mensagens Processadas - Kafka Service",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:trace.kafka.produce.hits{service:kafka-service,env:docker}.as_count()",
+            "display_type": "line"
+          }
+        ],
+        "yaxis": {
+          "scale": "linear"
+        }
+      },
+      "layout": {
+        "x": 6,
+        "y": 0,
+        "width": 6,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "title": "🧠 Uso de Memória por Serviço",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:system.mem.pct_usable{service:conta-service,env:docker} by {service}",
+            "display_type": "line"
+          },
+          {
+            "q": "avg:system.mem.pct_usable{service:kafka-service,env:docker} by {service}",
+            "display_type": "line"
+          },
+          {
+            "q": "avg:system.mem.pct_usable{service:log-service,env:docker} by {service}",
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 6,
+        "width": 12,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "title": "🔥 Erros 4xx e 5xx - Todos os Serviços",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:trace.http.requests{service:*,env:docker,status:5*}.as_count()",
+            "display_type": "bars"
+          },
+          {
+            "q": "sum:trace.http.requests{service:*,env:docker,status:4*}.as_count()",
+            "display_type": "bars"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 12,
+        "width": 12,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "title": "📜 Logs Recentes - Log Service",
+        "type": "log_stream",
+        "logset": "main",
+        "query": "service:log-service",
+        "columns": ["timestamp", "message", "status"],
+        "sort": {
+          "column": "timestamp",
+          "order": "desc"
+        },
+        "show_date_column": true,
+        "show_message_column": true
+      },
+      "layout": {
+        "x": 0,
+        "y": 18,
+        "width": 12,
+        "height": 6
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "service",
+      "prefix": "service",
+      "default": "*"
+    },
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "docker"
+    }
+  ],
+  "notify_list": [],
+  "reflow_type": "fixed"
+}
