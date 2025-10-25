@@ -44,6 +44,7 @@ O projeto é composto por microsserviços independentes que se comunicam de form
          | ---> Produz logs via HTTP ---> log-service (8083)
 ```
 
+
 ## 🛠 Tecnologias Utilizadas
 
 | Categoria | Tecnologias |
@@ -101,6 +102,20 @@ A plataforma Datadog detecta automaticamente os serviços monitorados:
 | **conta-service** | `env:docker` | 413ms | ✅ OK |
 | **kafka-service** | `env:docker` | 135ms | ✅ OK |
 | **log-service** | `env:docker` | 38.5ms | ✅ OK |
+
+---
+
+## 🧩 Arquitetura em Execução e Observabilidade
+
+Abaixo, é possível visualizar a infraestrutura dos microserviços em execução via Docker e o painel de monitoramento no Datadog.
+
+### 🐳 Containers em Execução
+![Containers](./imagens/containers.png)
+
+### 📊 Monitoramento Datadog
+![Datadog Dashboard](./imagens/datadog.png)
+
+---
 
 ## 🔑 Variáveis de Ambiente
 
