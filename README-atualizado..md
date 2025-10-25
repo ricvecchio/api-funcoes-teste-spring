@@ -110,10 +110,10 @@ A plataforma Datadog detecta automaticamente os serviços monitorados:
 Abaixo, é possível visualizar a infraestrutura dos microserviços em execução via Docker e o painel de monitoramento no Datadog.
 
 ### 🐳 Containers em Execução
-![Containers](./imagens/containers.png)
+![Containers](https://github.com/ricvecchio/api-funcoes-teste-spring/blob/main/images/datadog-containers.png)
 
 ### 📊 Monitoramento Datadog
-![Datadog Dashboard](./imagens/datadog.png)
+![Datadog Dashboard](https://github.com/ricvecchio/api-funcoes-teste-spring/blob/main/images/datadog-services.png)
 
 ---
 
